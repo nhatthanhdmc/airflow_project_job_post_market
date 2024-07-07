@@ -24,11 +24,18 @@ def cv_job_post_sitemap():
 def cv_job_post_detail():
     print('CV - job post detail')
     
+def etl_cv_jp_detail_postgres(worker):
+    print("ETL job post detail to postgres")
+    
 def cv_company_sitemap():
     print('CV - company sitemap')
     
 def cv_company_detail():
-    print('CV - company detail')
+    print('CV - company detail')    
+    
+def etl_cv_company_detail_postgres():
+    print("ETL company detail to postgres")
+    
     
 # VNW
 def vnw_job_post_sitemap():
@@ -69,9 +76,8 @@ def itviec_company_sitemap():
     
 def itviec_company_detail():
     print('IT VIEC - company detail')
+
     
-def etl_cv_company_detail_postgres():
-    print("ETL company detail to postgres")
     
 # [START instantiate_dag]
 with DAG(
@@ -99,9 +105,19 @@ with DAG(
         python_callable=cv_job_post_sitemap
     )
     
-    t_cv_jp_detail = PythonOperator(
-        task_id="cv_job_post_detail",
+    t_cv_jp_detail_1 = PythonOperator(
+        task_id="cv_job_post_detail_1",
         python_callable=cv_job_post_detail
+    )
+    
+    t_cv_jp_detail_2 = PythonOperator(
+        task_id="cv_job_post_detail_2",
+        python_callable=cv_job_post_detail
+    )
+    
+    t_etl_cv_jp_detail_postgres = PythonOperator(
+        task_id="etl_cv_jp_detail_postgres",
+        python_callable=etl_cv_jp_detail_postgres
     )
     
     t_cv_company_sitemap = PythonOperator(
@@ -118,84 +134,86 @@ with DAG(
         task_id="cv_company_detail_2",
         python_callable=cv_company_detail
     )
-    # VNW
-    t_vnw_jp_sitemap = PythonOperator(
-        task_id="vnw_job_post_sitemap",
-        python_callable=vnw_job_post_sitemap
-    )
-    
-    t_vnw_jp_detail = PythonOperator(
-        task_id="vnw_job_post_detail",
-        python_callable=vnw_job_post_detail
-    )
-    
-    t_vnw_company_sitemap = PythonOperator(
-        task_id="vnw_company_sitemap",
-        python_callable=vnw_company_sitemap
-    )
-    
-    t_vnw_company_detail = PythonOperator(
-        task_id="vnw_company_detail",
-        python_callable=vnw_company_detail
-    )
-    
-    # TOPCV
-    t_topcv_jp_sitemap = PythonOperator(
-        task_id="topcv_job_post_sitemap",
-        python_callable=topcv_job_post_sitemap
-    )
-    
-    t_topcv_jp_detail = PythonOperator(
-        task_id="topcv_job_post_detail",
-        python_callable=topcv_job_post_detail
-    )
-    
-    t_topcv_company_sitemap = PythonOperator(
-        task_id="topcv_company_sitemap",
-        python_callable=topcv_company_sitemap
-    )
-    
-    t_topcv_company_detail = PythonOperator(
-        task_id="topcv_company_detail",
-        python_callable=topcv_company_detail
-    )
-    
-    # ITVIEC
-    t_itviec_jp_sitemap = PythonOperator(
-        task_id="itviec_job_post_sitemap",
-        python_callable=itviec_job_post_sitemap
-    )
-    
-    t_itviec_jp_detail = PythonOperator(
-        task_id="itviec_job_post_detail",
-        python_callable=itviec_job_post_detail
-    )
-    
-    t_itviec_company_sitemap = PythonOperator(
-        task_id="itviec_company_sitemap",
-        python_callable=itviec_company_sitemap
-    )
-    
-    t_itviec_company_detail = PythonOperator(
-        task_id="itviec_company_detail",
-        python_callable=itviec_company_detail
-    )
     
     t_etl_cv_company_detail_postgres = PythonOperator(
         task_id="etl_cv_company_detail_postgres",
         python_callable=etl_cv_company_detail_postgres
     )
+    # VNW
+    # t_vnw_jp_sitemap = PythonOperator(
+    #     task_id="vnw_job_post_sitemap",
+    #     python_callable=vnw_job_post_sitemap
+    # )
+    
+    # t_vnw_jp_detail = PythonOperator(
+    #     task_id="vnw_job_post_detail",
+    #     python_callable=vnw_job_post_detail
+    # )
+    
+    # t_vnw_company_sitemap = PythonOperator(
+    #     task_id="vnw_company_sitemap",
+    #     python_callable=vnw_company_sitemap
+    # )
+    
+    # t_vnw_company_detail = PythonOperator(
+    #     task_id="vnw_company_detail",
+    #     python_callable=vnw_company_detail
+    # )
+    
+    # TOPCV
+    # t_topcv_jp_sitemap = PythonOperator(
+    #     task_id="topcv_job_post_sitemap",
+    #     python_callable=topcv_job_post_sitemap
+    # )
+    
+    # t_topcv_jp_detail = PythonOperator(
+    #     task_id="topcv_job_post_detail",
+    #     python_callable=topcv_job_post_detail
+    # )
+    
+    # t_topcv_company_sitemap = PythonOperator(
+    #     task_id="topcv_company_sitemap",
+    #     python_callable=topcv_company_sitemap
+    # )
+    
+    # t_topcv_company_detail = PythonOperator(
+    #     task_id="topcv_company_detail",
+    #     python_callable=topcv_company_detail
+    # )
+    
+    # ITVIEC
+    # t_itviec_jp_sitemap = PythonOperator(
+    #     task_id="itviec_job_post_sitemap",
+    #     python_callable=itviec_job_post_sitemap
+    # )
+    
+    # t_itviec_jp_detail = PythonOperator(
+    #     task_id="itviec_job_post_detail",
+    #     python_callable=itviec_job_post_detail
+    # )
+    
+    # t_itviec_company_sitemap = PythonOperator(
+    #     task_id="itviec_company_sitemap",
+    #     python_callable=itviec_company_sitemap
+    # )
+    
+    # t_itviec_company_detail = PythonOperator(
+    #     task_id="itviec_company_detail",
+    #     python_callable=itviec_company_detail
+    # )   
+    
    
     # [END jinja_template]
 
     t_cv_company_sitemap >> [t_cv_company_detail_1, t_cv_company_detail_2] >> t_etl_cv_company_detail_postgres
-    t_vnw_company_sitemap >> t_vnw_company_detail
-    t_topcv_company_sitemap >> t_topcv_company_detail
-    t_itviec_company_sitemap >> t_itviec_company_detail
     
-    t_cv_jp_sitemap >> t_cv_jp_detail
-    t_vnw_jp_sitemap >> t_vnw_jp_detail
-    t_topcv_jp_sitemap >> t_topcv_jp_detail
-    t_itviec_jp_sitemap >> t_itviec_jp_detail
+    # t_vnw_company_sitemap >> t_vnw_company_detail
+    # t_topcv_company_sitemap >> t_topcv_company_detail
+    # t_itviec_company_sitemap >> t_itviec_company_detail
+    
+    t_cv_jp_sitemap >> [t_cv_jp_detail_1, t_cv_jp_detail_2] >> t_etl_cv_jp_detail_postgres
+    # t_vnw_jp_sitemap >> t_vnw_jp_detail
+    # t_topcv_jp_sitemap >> t_topcv_jp_detail
+    # t_itviec_jp_sitemap >> t_itviec_jp_detail
     
 # [END tutorial]
