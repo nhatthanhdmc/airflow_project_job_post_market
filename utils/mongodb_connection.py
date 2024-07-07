@@ -15,15 +15,24 @@ class MongoDB:
             self.client = None
             self.db = None
             self.collection = None
+            self.maxPoolSize=10
+            self.minPoolSize=5
+            self.connectTimeoutMS=30000
+            self.socketTimeoutMS=30000
         except Exception as e:
             print(f"Error connecting to MongoDB: {e}")
 
     def connect(self):
         try:
             if self.username and self.password:
-                self.client = MongoClient(self.host, self.port, username=self.username, password=self.password)
+                self.client = MongoClient(self.host, self.port, username=self.username, password=self.password
+                                          , maxPoolSize=self.maxPoolSize, minPoolSize=self.minPoolSize
+                                          , connectTimeoutMS=self.connectTimeoutMS, socketTimeoutMS=self.socketTimeoutMS
+                                          )
             else:
-                self.client = MongoClient(self.host, self.port)
+                self.client = MongoClient(self.host, self.port
+                                          , maxPoolSize=self.maxPoolSize, minPoolSize=self.minPoolSize
+                                          , connectTimeoutMS=self.connectTimeoutMS, socketTimeoutMS=self.socketTimeoutMS)
             self.db = self.client[self.dbname]
             self.collection = self.db[self.collection_name]
             print("Connection successful")
@@ -133,6 +142,41 @@ class MongoDB:
                 print(f"Error truncating collection: {e}")
         else:
             print("No collection found to truncate.")
+            
+    def delete_duplicates_with_condition(self, key_fields, condition):
+        """
+        Delete duplicates in the collection based on key fields and an additional condition.
+        :param key_fields: List of fields to identify duplicates.
+        :param condition: Dictionary representing the additional condition for filtering documents.
+        $gte >=
+        $gt >
+        $lt <
+        $lte <=
+        """
+        try:
+            pipeline = [
+                {"$match": condition},
+                {"$group": {
+                    "_id": {field: f"${field}" for field in key_fields},
+                    "count": {"$sum": 1},
+                    "ids": {"$push": "$_id"}
+                }},
+                {"$match": {
+                    "count": {"$gt": 1}
+                }}
+            ]
+
+            duplicates = list(self.collection.aggregate(pipeline))
+
+            for doc in duplicates:
+                ids = doc['ids']
+                # Keep the first document and delete the rest
+                keep_id = ids.pop(0)
+                self.collection.delete_many({"_id": {"$in": ids}})
+
+            print(f"Deleted {len(duplicates)} duplicate groups based on the condition.")
+        except Exception as e:
+            print(f"Error deleting duplicates: {e}")
 """
 # Example usage:
 if __name__ == "__main__":

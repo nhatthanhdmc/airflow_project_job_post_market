@@ -103,7 +103,8 @@ def crawl_employer_sitemap(url):
                     'employer_url': employer_url,
                     'changefreq': changefreq.text.strip() if changefreq is not None else None,
                     'lastmod': lastmod.text.strip() if lastmod is not None else None,
-                    "created_date": today
+                    "created_date": today,
+                    "worker": check_url_worker(employer_url)
                 })
             
         return list_url    
@@ -219,7 +220,29 @@ def employer_url_generator():
     
     # Close the connection    
     mongodb.close()
-
+    
+def employer_url_generator_airflow(worker):    
+    """
+    Crawl all jobs in sitemap data and store into mongodb using Airflow
+    Args: 
+        worker
+    Returns: employer url
+    """  
+    mongodb = connect_mongodb()
+    mongodb.set_collection(conn['cv_employer_sitemap'])
+    # Filter
+    filter = {"created_date": today, "worker": worker}
+    # Projecttion: select only the "job_url" field
+    projection = {"_id": False, "employer_url": True}
+    cursor = mongodb.select(filter, projection)
+    
+    # Extract job_url
+    for document in cursor: 
+        print(document["employer_url"])
+        crawl_employer_worker(document["employer_url"])    
+        break
+    # Close the connection    
+    mongodb.close()
   
 def current_employer_process():
     """
@@ -248,12 +271,12 @@ def check_url_worker(url):
         return 1
     return 2
        
-if __name__ == "__main__":  
-    # Process site map process
-    employer_sitemap_process()
+# if __name__ == "__main__":  
+#     # Process site map process
+#     employer_sitemap_process()
     
-    # Current employer process
-    current_employer_process()
+#     # Current employer process
+#     current_employer_process()
     
 
     

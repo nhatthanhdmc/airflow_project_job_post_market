@@ -12,72 +12,36 @@ import pandas as pd
 import chardet
 from psycopg2 import sql
 import psycopg2
-import job_post_crawling.cv.crawling_cv_jobpost_sitemap as cv
+import os
+import sys 
+module_path = os.path.abspath(os.getcwd())
+if module_path not in sys.path:
+    sys.path.append(module_path)
+    
+import utils.careerviet.crawling_cv_job_post as cv_jp
+import utils.careerviet.crawling_cv_employer as cv_emp   
 
 # [END import_module]
 # Python script
 
 # CV
 def cv_job_post_sitemap():
-    print('CV - job post sitemap')
+    cv_jp.job_post_sitemap_process()
     
-def cv_job_post_detail():
-    print('CV - job post detail')
+def cv_job_post_detail(worker):
+    cv_jp.job_url_generator_airflow(worker)
     
-def etl_cv_jp_detail_postgres(worker):
+def etl_cv_jp_detail_postgres():
     print("ETL job post detail to postgres")
     
-def cv_company_sitemap():
-    print('CV - company sitemap')
+def cv_employer_sitemap():
+    cv_emp.employer_sitemap_process()
     
-def cv_company_detail():
-    print('CV - company detail')    
+def cv_employer_detail(worker):
+    cv_emp.employer_url_generator_airflow(worker)
     
-def etl_cv_company_detail_postgres():
-    print("ETL company detail to postgres")
-    
-    
-# VNW
-def vnw_job_post_sitemap():
-    print('VNW - job post sitemap')
-    
-def vnw_job_post_detail():
-    print('VNW - job post detail')
-    
-def vnw_company_sitemap():
-    print('VNW - company sitemap')
-    
-def vnw_company_detail():
-    print('VNW - company detail')
-    
-# TOPCV
-def topcv_job_post_sitemap():
-    print('TOPCV - job post sitemap')
-    
-def topcv_job_post_detail():
-    print('TOPCV - job post detail')
-    
-def topcv_company_sitemap():
-    print('TOPCV - company sitemap')
-    
-def topcv_company_detail():
-    print('TOPCV - company detail')
-    
-# ITVIEC
-
-def itviec_job_post_sitemap():
-    print('IT VIEC - job post sitemap')
-    
-def itviec_job_post_detail():
-    print('IT VIEC - job post detail')
-    
-def itviec_company_sitemap():
-    print('IT VIEC - company sitemap')
-    
-def itviec_company_detail():
-    print('IT VIEC - company detail')
-
-    
+def etl_cv_employer_detail_postgres():
+    print("ETL company detail to postgres")      
     
 # [START instantiate_dag]
 with DAG(
@@ -105,115 +69,38 @@ with DAG(
         python_callable=cv_job_post_sitemap
     )
     
-    t_cv_jp_detail_1 = PythonOperator(
-        task_id="cv_job_post_detail_1",
-        python_callable=cv_job_post_detail
-    )
-    
-    t_cv_jp_detail_2 = PythonOperator(
-        task_id="cv_job_post_detail_2",
-        python_callable=cv_job_post_detail
-    )
-    
     t_etl_cv_jp_detail_postgres = PythonOperator(
         task_id="etl_cv_jp_detail_postgres",
         python_callable=etl_cv_jp_detail_postgres
+    )    
+        
+    t_cv_employer_sitemap = PythonOperator(
+        task_id="cv_employer_sitemap",
+        python_callable=cv_employer_sitemap
+    )
+               
+    t_etl_cv_employer_detail_postgres = PythonOperator(
+        task_id="etl_cv_employer_detail_postgres",
+        python_callable=etl_cv_employer_detail_postgres
     )
     
-    t_cv_company_sitemap = PythonOperator(
-        task_id="cv_company_sitemap",
-        python_callable=cv_company_sitemap
-    )
-    
-    t_cv_company_detail_1 = PythonOperator(
-        task_id="cv_company_detail_1",
-        python_callable=cv_company_detail
-    )
-    
-    t_cv_company_detail_2 = PythonOperator(
-        task_id="cv_company_detail_2",
-        python_callable=cv_company_detail
-    )
-    
-    t_etl_cv_company_detail_postgres = PythonOperator(
-        task_id="etl_cv_company_detail_postgres",
-        python_callable=etl_cv_company_detail_postgres
-    )
-    # VNW
-    # t_vnw_jp_sitemap = PythonOperator(
-    #     task_id="vnw_job_post_sitemap",
-    #     python_callable=vnw_job_post_sitemap
-    # )
-    
-    # t_vnw_jp_detail = PythonOperator(
-    #     task_id="vnw_job_post_detail",
-    #     python_callable=vnw_job_post_detail
-    # )
-    
-    # t_vnw_company_sitemap = PythonOperator(
-    #     task_id="vnw_company_sitemap",
-    #     python_callable=vnw_company_sitemap
-    # )
-    
-    # t_vnw_company_detail = PythonOperator(
-    #     task_id="vnw_company_detail",
-    #     python_callable=vnw_company_detail
-    # )
-    
-    # TOPCV
-    # t_topcv_jp_sitemap = PythonOperator(
-    #     task_id="topcv_job_post_sitemap",
-    #     python_callable=topcv_job_post_sitemap
-    # )
-    
-    # t_topcv_jp_detail = PythonOperator(
-    #     task_id="topcv_job_post_detail",
-    #     python_callable=topcv_job_post_detail
-    # )
-    
-    # t_topcv_company_sitemap = PythonOperator(
-    #     task_id="topcv_company_sitemap",
-    #     python_callable=topcv_company_sitemap
-    # )
-    
-    # t_topcv_company_detail = PythonOperator(
-    #     task_id="topcv_company_detail",
-    #     python_callable=topcv_company_detail
-    # )
-    
-    # ITVIEC
-    # t_itviec_jp_sitemap = PythonOperator(
-    #     task_id="itviec_job_post_sitemap",
-    #     python_callable=itviec_job_post_sitemap
-    # )
-    
-    # t_itviec_jp_detail = PythonOperator(
-    #     task_id="itviec_job_post_detail",
-    #     python_callable=itviec_job_post_detail
-    # )
-    
-    # t_itviec_company_sitemap = PythonOperator(
-    #     task_id="itviec_company_sitemap",
-    #     python_callable=itviec_company_sitemap
-    # )
-    
-    # t_itviec_company_detail = PythonOperator(
-    #     task_id="itviec_company_detail",
-    #     python_callable=itviec_company_detail
-    # )   
-    
-   
     # [END jinja_template]
 
-    t_cv_company_sitemap >> [t_cv_company_detail_1, t_cv_company_detail_2] >> t_etl_cv_company_detail_postgres
+    for worker in [1,2]:
+        call_employer_detail = PythonOperator(
+            task_id= f"cv_employer_detail_{worker}",
+            python_callable=cv_employer_detail,
+            op_kwargs={'worker': worker}
+        )
+        t_cv_employer_sitemap >> call_employer_detail >> t_etl_cv_employer_detail_postgres
     
-    # t_vnw_company_sitemap >> t_vnw_company_detail
-    # t_topcv_company_sitemap >> t_topcv_company_detail
-    # t_itviec_company_sitemap >> t_itviec_company_detail
     
-    t_cv_jp_sitemap >> [t_cv_jp_detail_1, t_cv_jp_detail_2] >> t_etl_cv_jp_detail_postgres
-    # t_vnw_jp_sitemap >> t_vnw_jp_detail
-    # t_topcv_jp_sitemap >> t_topcv_jp_detail
-    # t_itviec_jp_sitemap >> t_itviec_jp_detail
+    for worker in [1, 2]:
+        call_jp_detail = PythonOperator(
+            task_id=f"cv_job_post_detail_{worker}",
+            python_callable=cv_job_post_detail,
+            op_kwargs={'worker': worker}
+        )
+        t_cv_jp_sitemap >> call_jp_detail >> t_etl_cv_jp_detail_postgres
     
 # [END tutorial]

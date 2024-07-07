@@ -15,7 +15,6 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 import requests
 from bs4 import BeautifulSoup
-import xml.etree.ElementTree as ET
 from utils.mongodb_connection import MongoDB
 from utils import config as cfg
 from datetime import date
@@ -103,7 +102,8 @@ def crawl_job_post_sitemap(url):
                         "changefreq": changefreq,
                         "lastmod": lastmod,
                         "priority": priority,
-                        "created_date": today
+                        "created_date": today,
+                        "worker": check_url_worker(job_url)
                     }
                 ) 
                 
@@ -360,6 +360,28 @@ def job_url_generator():
     # Close the connection    
     mongodb.close()
 
+def job_url_generator_airflow(worker):    
+    """
+    Crawl all jobs in sitemap data and store into mongodb using Airflow
+    Args: 
+        worker
+    Returns: job url
+    """  
+    mongodb = connect_mongodb()
+    mongodb.set_collection(conn['cv_job_post_sitemap'])
+    # Filter
+    filter = {"created_date": today, "worker": worker}
+    # Projecttion: select only the "job_url" field
+    projection = {"_id": False, "job_url": True}
+    cursor = mongodb.select(filter, projection)
+    
+    # Extract job_url
+    for document in cursor:
+        print(document["job_url"])
+        crawl_job_post_worker(document["job_url"]) 
+        break   
+    # Close the connection    
+    mongodb.close()
     
 def current_job_post_process():
     """
@@ -396,16 +418,16 @@ def check_url_worker(url):
         return 1
     return 2
           
-if __name__ == "__main__":  
-    # Process sitemap
-    job_post_sitemap_process()     
+# if __name__ == "__main__":  
+#     # Process sitemap
+#     job_post_sitemap_process()     
     
-    # Craw current jobs process
-    start_time = time.time()
-    current_job_post_process()
-    print('Execution time: ', time.time()-start_time)
+#     # Craw current jobs process
+#     start_time = time.time()
+#     current_job_post_process()
+#     print('Execution time: ', time.time()-start_time)
     
-    # delete_duplicate_job_post_detail()
+#     # delete_duplicate_job_post_detail()
     
     
     
