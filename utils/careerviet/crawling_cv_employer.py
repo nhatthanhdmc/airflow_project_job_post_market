@@ -186,15 +186,20 @@ def crawl_employer_worker(url):
                 "about_us" : about_us,                
                 "employer_url": url,
                 "created_date": today,
+                "updated_date": today,
                 "worker": check_url_worker(url)
             }
             
             mongodb = connect_mongodb()    
             mongodb.set_collection(conn['cv_employer_detail'])
-            mongodb.insert_one(employer)
+            # check employ_id exist or not
+            filter = {"employer_id": employer_id}
+            if len(mongodb.select(filter)) > 0:
+                mongodb.update_one(filter, employer)
+            else:          
+                mongodb.insert_one(employer)
             # Close the connection    
-            mongodb.close()            
-            # time.sleep(1) 
+            mongodb.close()  
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")
            
@@ -282,3 +287,10 @@ def check_url_worker(url):
     
 
 
+# mongodb = connect_mongodb()
+# mongodb.set_collection(conn['cv_employer_detail'])
+#     # Delete duplicates based on specified key fields
+# key_fields = ["employer_id"]  # Fields to identify duplicates
+# condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
+# mongodb.delete_duplicates_with_condition(key_fields, condition)
+# mongodb.close()

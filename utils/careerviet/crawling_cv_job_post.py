@@ -431,7 +431,14 @@ def check_url_worker(url):
     
     
     
+# mongodb = connect_mongodb()
+# mongodb.set_collection(conn['cv_job_post_detail'])
+#     # Delete duplicates based on specified key fields
+# key_fields = ["job_id", "job_title"]  # Fields to identify duplicates
+# condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
+# mongodb.delete_duplicates_with_condition(key_fields, condition)
+# mongodb.close()    
     
     
-    
+
 
