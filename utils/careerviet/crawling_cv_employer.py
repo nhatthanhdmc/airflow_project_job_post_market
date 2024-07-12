@@ -3,9 +3,10 @@
 import multiprocessing.pool
 import os
 import sys 
-module_path = os.path.abspath(os.getcwd())
-if module_path not in sys.path:
-    sys.path.append(module_path)
+import json
+# module_path = os.path.abspath(os.getcwd())
+# if module_path not in sys.path:
+#     sys.path.append(module_path)
 import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
@@ -15,6 +16,7 @@ from datetime import date
 import re
 import time
 import multiprocessing
+
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -175,28 +177,32 @@ def crawl_employer_worker(url):
                         website = li.find('span', class_='mdi-link').text.strip()
                 if  soup.find('div', class_='intro-section'):
                     about_us = soup.find('div', class_='intro-section').find('div', class_='box-text').text.strip()
-                           
-            employer ={
-                "employer_id": employer_id,
-                "employer_name": employer_name,
-                "location" : location,
-                "company_size" : company_size,
-                "industry" : industry,
-                "website" : website,
-                "about_us" : about_us,                
-                "employer_url": url,
-                "created_date": today,
-                "updated_date": today,
-                "worker": check_url_worker(url)
-            }
-            
+            employer = {
+                    "employer_id": employer_id,
+                    "employer_name": employer_name,
+                    "location" : location,
+                    "company_size" : company_size,
+                    "industry" : industry,
+                    "website" : website,
+                    "about_us" : about_us,                
+                    "employer_url": url,
+                    "created_date": today,
+                    "updated_date": today,
+                    "worker": check_url_worker(url)
+                }      
+                               
             mongodb = connect_mongodb()    
             mongodb.set_collection(conn['cv_employer_detail'])
+            
             # check employ_id exist or not
             filter = {"employer_id": employer_id}
             if len(mongodb.select(filter)) > 0:
+                # Remove the 'created_date' key from the dictionary
+                if "created_date" in employer:
+                    del employer["created_date"]
                 mongodb.update_one(filter, employer)
-            else:          
+            else:  
+                  
                 mongodb.insert_one(employer)
             # Close the connection    
             mongodb.close()  
@@ -236,7 +242,7 @@ def employer_url_generator_airflow(worker):
     mongodb = connect_mongodb()
     mongodb.set_collection(conn['cv_employer_sitemap'])
     # Filter
-    filter = {"created_date": today, "worker": worker}
+    filter = {"lastmod": today, "worker": worker}
     # Projecttion: select only the "job_url" field
     projection = {"_id": False, "employer_url": True}
     cursor = mongodb.select(filter, projection)
@@ -281,8 +287,7 @@ def check_url_worker(url):
 #     employer_sitemap_process()
     
 #     # Current employer process
-#     current_employer_process()
-    
+#     current_employer_process()  
 
     
 

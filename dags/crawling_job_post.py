@@ -14,12 +14,16 @@ from psycopg2 import sql
 import psycopg2
 import os
 import sys 
-module_path = os.path.abspath(os.getcwd())
-if module_path not in sys.path:
-    sys.path.append(module_path)
-    
+# module_path = os.path.abspath(os.getcwd())
+# if module_path not in sys.path:
+#     sys.path.append(module_path)
+# Add the directory containing your module to the Python path
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'mymodule')))
+   
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'utils')))
 import utils.careerviet.crawling_cv_job_post as cv_jp
 import utils.careerviet.crawling_cv_employer as cv_emp   
+
 
 # [END import_module]
 # Python script

@@ -10,9 +10,10 @@ the xml parser to handle potential issues with malformed XML.
 import multiprocessing.pool
 import os
 import sys 
-module_path = os.path.abspath(os.getcwd())
-if module_path not in sys.path:
-    sys.path.append(module_path)
+import json
+# module_path = os.path.abspath(os.getcwd())
+# if module_path not in sys.path:
+#     sys.path.append(module_path)
 import requests
 from bs4 import BeautifulSoup
 from utils.mongodb_connection import MongoDB
@@ -40,7 +41,6 @@ conn = cfg.mongodb['CRAWLING']
 import random
 def get_random_proxy(proxies):
     return random.choice(proxies)
-
 
 def connect_mongodb():   
     """
@@ -203,6 +203,7 @@ def crawl_job_post_template1(soup, url):
         "job_requirement": job_requirement,
         "more_information": more_information,
         "created_date": today,
+        "updated_date": today,
         "worker" : check_url_worker(url)
     }   
     return job
@@ -297,6 +298,7 @@ def crawl_job_post_template2(soup, url):
         "job_requirement": job_requirement,
         "more_information": more_information,
         "created_date": today,
+        "updated_date": today,
         "worker" : check_url_worker(url)
     }
     # print(job)
@@ -330,7 +332,16 @@ def crawl_job_post_worker(url):
             
             mongodb = connect_mongodb()    
             mongodb.set_collection(conn['cv_job_post_detail'])
-            mongodb.insert_one(job)
+            
+            filter = {"job_id": job["job_id"]}
+            if len(mongodb.select(filter)) > 0:
+                # Remove the 'created_date' key from the dictionary
+                if "created_date" in job:
+                    del job["created_date"]
+                mongodb.update_one(job)
+            else:
+                mongodb.insert_one(job)
+             
             # Close the connection    
             mongodb.close()            
             # time.sleep(1) 
