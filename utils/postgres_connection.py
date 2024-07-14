@@ -1,124 +1,168 @@
 import psycopg2
+from psycopg2 import pool
 from psycopg2 import sql
 
-class PostGresDBManager:
-    """ 
-        Connect to a PostgreSQL database and perform the following operations: insert, delete, update, select, and truncate
-    """
-    def __init__(self, dbname, user, password, host, port):
+class PostgresDB:
+    def __init__(self, dbname, user, password, host='localhost', port=5432, minconn=1, maxconn=10):
         self.dbname = dbname
         self.user = user
         self.password = password
         self.host = host
         self.port = port
-        self.connection = None
-        self.cursor = None
+        self.minconn = minconn
+        self.maxconn = maxconn
+        self.connection_pool = None
 
-    def connect(self):
+    def initialize_pool(self):
         try:
-            self.connection = psycopg2.connect(
+            self.connection_pool = psycopg2.pool.SimpleConnectionPool(
+                self.minconn,
+                self.maxconn,
                 dbname=self.dbname,
                 user=self.user,
                 password=self.password,
                 host=self.host,
                 port=self.port
             )
-            self.cursor = self.connection.cursor()
-            print("Connection successful")
+            print("Connection pool created successfully")
         except Exception as e:
-            print(f"Error connecting to database: {e}")
+            print(f"Error creating connection pool: {e}")
 
-    def close(self):
-        if self.cursor:
-            self.cursor.close()
-        if self.connection:
-            self.connection.close()
-        print("Connection closed")
+    def close_pool(self):
+        if self.connection_pool:
+            self.connection_pool.closeall()
+        print("Connection pool closed")
+
+    def get_connection(self):
+        try:
+            return self.connection_pool.getconn()
+        except Exception as e:
+            print(f"Error getting connection from pool: {e}")
+            return None
+
+    def put_connection(self, conn):
+        try:
+            self.connection_pool.putconn(conn)
+        except Exception as e:
+            print(f"Error returning connection to pool: {e}")
 
     def insert(self, table, data):
+        conn = self.get_connection()
+        if not conn:
+            return None
         try:
+            cursor = conn.cursor()
             columns = data.keys()
             values = [data[column] for column in columns]
             insert_statement = sql.SQL(
-                'INSERT INTO {table} ({fields}) VALUES ({values})'
+                "INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING id"
             ).format(
                 table=sql.Identifier(table),
-                fields=sql.SQL(',').join(map(sql.Identifier, columns)),
-                values=sql.SQL(',').join(sql.Placeholder() * len(columns))
+                fields=sql.SQL(', ').join(map(sql.Identifier, columns)),
+                values=sql.SQL(', ').join(sql.Placeholder() * len(values))
             )
-            self.cursor.execute(insert_statement, values)
-            self.connection.commit()
-            print("Insert successful")
+            cursor.execute(insert_statement, values)
+            conn.commit()
+            inserted_id = cursor.fetchone()[0]
+            cursor.close()
+            return inserted_id
         except Exception as e:
+            conn.rollback()
             print(f"Error inserting data: {e}")
-            self.connection.rollback()
-
-    def delete(self, table, condition):
-        try:
-            delete_statement = sql.SQL('DELETE FROM {table} WHERE {condition}').format(
-                table=sql.Identifier(table),
-                condition=sql.SQL(condition)
-            )
-            self.cursor.execute(delete_statement)
-            self.connection.commit()
-            print("Delete successful")
-        except Exception as e:
-            print(f"Error deleting data: {e}")
-            self.connection.rollback()
+            return None
+        finally:
+            self.put_connection(conn)
 
     def update(self, table, data, condition):
+        conn = self.get_connection()
+        if not conn:
+            return None
         try:
-            set_statement = sql.SQL(', ').join(
-                sql.Composed([sql.Identifier(k), sql.SQL(" = "), sql.Placeholder(k)]) for k in data.keys()
-            )
-            update_statement = sql.SQL('UPDATE {table} SET {set_values} WHERE {condition}').format(
-                table=sql.Identifier(table),
-                set_values=set_statement,
-                condition=sql.SQL(condition)
-            )
-            self.cursor.execute(update_statement, data)
-            self.connection.commit()
-            print("Update successful")
+            cursor = conn.cursor()
+            set_statement = ", ".join([f"{key} = %s" for key in data.keys()])
+            where_statement = " AND ".join([f"{key} = %s" for key in condition.keys()])
+            values = list(data.values()) + list(condition.values())
+            update_statement = f"UPDATE {table} SET {set_statement} WHERE {where_statement}"
+            cursor.execute(update_statement, values)
+            conn.commit()
+            updated_rows = cursor.rowcount
+            cursor.close()
+            return updated_rows
         except Exception as e:
+            conn.rollback()
             print(f"Error updating data: {e}")
-            self.connection.rollback()
+            return None
+        finally:
+            self.put_connection(conn)
+
+    def delete(self, table, condition):
+        conn = self.get_connection()
+        if not conn:
+            return None
+        try:
+            cursor = conn.cursor()
+            where_statement = " AND ".join([f"{key} = %s" for key in condition.keys()])
+            values = list(condition.values())
+            delete_statement = f"DELETE FROM {table} WHERE {where_statement}"
+            cursor.execute(delete_statement, values)
+            conn.commit()
+            deleted_rows = cursor.rowcount
+            cursor.close()
+            return deleted_rows
+        except Exception as e:
+            conn.rollback()
+            print(f"Error deleting data: {e}")
+            return None
+        finally:
+            self.put_connection(conn)
 
     def select(self, table, columns='*', condition=None):
-        try:
-            if condition:
-                query = sql.SQL('SELECT {fields} FROM {table} WHERE {condition}').format(
-                    fields=sql.SQL(',').join(map(sql.Identifier, columns)),
-                    table=sql.Identifier(table),
-                    condition=sql.SQL(condition)
-                )
-            else:
-                query = sql.SQL('SELECT {fields} FROM {table}').format(
-                    fields=sql.SQL(',').join(map(sql.Identifier, columns)),
-                    table=sql.Identifier(table)
-                )
-            self.cursor.execute(query)
-            results = self.cursor.fetchall()
-            return results
-        except Exception as e:
-            print(f"Error executing select query: {e}")
+        conn = self.get_connection()
+        if not conn:
             return None
+        try:
+            cursor = conn.cursor()
+            if condition:
+                where_statement = " AND ".join([f"{key} = %s" for key in condition.keys()])
+                values = list(condition.values())
+                select_statement = f"SELECT {columns} FROM {table} WHERE {where_statement}"
+                cursor.execute(select_statement, values)
+            else:
+                select_statement = f"SELECT {columns} FROM {table}"
+                cursor.execute(select_statement)
+            rows = cursor.fetchall()
+            cursor.close()
+            return rows
+        except Exception as e:
+            print(f"Error selecting data: {e}")
+            return None
+        finally:
+            self.put_connection(conn)
 
-"""
 # Example usage:
-if __name__ == "__main__":
-    db = PostgresDB(dbname='your_db', user='your_user', password='your_pass', host='your_host', port='your_port')
-    db.connect()
+# if __name__ == "__main__":
+#     db = PostgresDB(dbname='your_dbname', user='your_user', password='your_password', host='your_host', port='your_port')
+    
+#     db.initialize_pool()
+    
+#     # Insert example
+#     data_to_insert = {"column1": "value1", "column2": "value2"}
+#     inserted_id = db.insert("your_table", data_to_insert)
+#     print(f"Inserted record ID: {inserted_id}")
 
-    # Insert example
-    db.insert('your_table', {'column1': 'value1', 'column2': 'value2'})
+#     # Update example
+#     data_to_update = {"column1": "new_value1"}
+#     condition_to_update = {"column2": "value2"}
+#     updated_rows = db.update("your_table", data_to_update, condition_to_update)
+#     print(f"Number of rows updated: {updated_rows}")
 
-    # Update example
-    db.update('your_table', {'column1': 'new_value1'}, "column2 = 'value2'")
+#     # Delete example
+#     condition_to_delete = {"column1": "value1"}
+#     deleted_rows = db.delete("your_table", condition_to_delete)
+#     print(f"Number of rows deleted: {deleted_rows}")
 
-    # Delete example
-    db.delete('your_table', "column1 = 'new_value1'")
-
-    # Select example
-    results = db.select('your_table', ['column1', 'column2'], "column2 = 'value2'")
-    print(results)
-"""
+#     # Select example
+#     selected_data = db.select("your_table", columns="column1, column2", condition={"column2": "value2"})
+#     print(f"Selected data: {selected_data}")
+    
+#     db.close_pool()

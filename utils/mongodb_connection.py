@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+from pymongo import pool
 
 class MongoDB:
     """

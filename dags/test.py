@@ -64,3 +64,5 @@ if len(mongodb.select(filter)) > 0:
     print(mongodb.select(filter))
 else:
     print('new')
+    
+sample = mongodb.select(filter)
