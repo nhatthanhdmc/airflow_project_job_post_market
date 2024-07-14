@@ -404,7 +404,12 @@ def current_job_post_process():
     mongodb = connect_mongodb()
     mongodb.set_collection(conn['cv_job_post_detail'])    
      # Delete current data
-    delete_filter = {"created_date": today}
+    delete_filter = {
+                    "$or": [
+                        { "created_date": { "$eq": today } },
+                        { "updated_date": { "$eq": today } }
+                    ]
+                    }
     mongodb.delete_many(delete_filter)
     # Close the connection    
     mongodb.close()
