@@ -287,6 +287,12 @@ def check_url_worker(url):
     if url_name in 'c':
         return 1
     return 2
+
+def load_employer_sitemap_into_postgres():
+    mongodb = connect_mongodb()
+    mongodb.set_collection(conn['cv_employer_sitemap']) 
+    cursor = mongodb.select()
+    return 
        
 # if __name__ == "__main__":  
 #     # Process site map process
