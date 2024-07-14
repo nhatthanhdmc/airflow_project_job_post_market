@@ -38,10 +38,6 @@ today = date.today().strftime("%Y-%m-%d")
 
 conn = cfg.mongodb['CRAWLING']
 
-import random
-def get_random_proxy(proxies):
-    return random.choice(proxies)
-
 def connect_mongodb():   
     """
     Return a connection to mongodb
@@ -333,13 +329,17 @@ def crawl_job_post_worker(url):
             mongodb = connect_mongodb()    
             mongodb.set_collection(conn['cv_job_post_detail'])
             
+            print(job)
             filter = {"job_id": job["job_id"]}
+            
             if len(mongodb.select(filter)) > 0:
+                print("Update ", filter)
                 # Remove the 'created_date' key from the dictionary
                 if "created_date" in job:
                     del job["created_date"]
-                mongodb.update_one(job)
+                mongodb.update_one(filter, job)
             else:
+                print("Insert ", filter)
                 mongodb.insert_one(job)
              
             # Close the connection    
@@ -390,7 +390,7 @@ def job_url_generator_airflow(worker):
     for document in cursor:
         print(document["job_url"])
         crawl_job_post_worker(document["job_url"]) 
-        break   
+        # break   
     # Close the connection    
     mongodb.close()
     

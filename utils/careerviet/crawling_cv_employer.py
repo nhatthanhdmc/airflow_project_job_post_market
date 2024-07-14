@@ -196,13 +196,15 @@ def crawl_employer_worker(url):
             
             # check employ_id exist or not
             filter = {"employer_id": employer_id}
+            print(employer_id)
             if len(mongodb.select(filter)) > 0:
+                print("Update ", filter)
                 # Remove the 'created_date' key from the dictionary
                 if "created_date" in employer:
                     del employer["created_date"]
                 mongodb.update_one(filter, employer)
-            else:  
-                  
+            else:
+                print("Insert ", filter)                    
                 mongodb.insert_one(employer)
             # Close the connection    
             mongodb.close()  
@@ -251,7 +253,7 @@ def employer_url_generator_airflow(worker):
     for document in cursor: 
         print(document["employer_url"])
         crawl_employer_worker(document["employer_url"])    
-        break
+        # break
     # Close the connection    
     mongodb.close()
   
