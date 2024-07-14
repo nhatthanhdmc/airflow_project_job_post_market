@@ -329,7 +329,6 @@ def crawl_job_post_worker(url):
             mongodb = connect_mongodb()    
             mongodb.set_collection(conn['cv_job_post_detail'])
             
-            print(job)
             filter = {"job_id": job["job_id"]}
             
             if len(mongodb.select(filter)) > 0:
@@ -429,7 +428,7 @@ def delete_duplicate_job_post_detail():
  
 def check_url_worker(url):
     url_name = url[len('https://careerviet.vn/vi/tim-viec-lam/') : len('https://careerviet.vn/vi/tim-viec-lam/') +1]
-    print(url_name)
+    # print(url_name)
     if url_name in 'abcdefghigkl':
         return 1
     return 2

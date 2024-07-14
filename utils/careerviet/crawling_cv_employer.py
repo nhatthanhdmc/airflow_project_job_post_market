@@ -196,7 +196,6 @@ def crawl_employer_worker(url):
             
             # check employ_id exist or not
             filter = {"employer_id": employer_id}
-            print(employer_id)
             if len(mongodb.select(filter)) > 0:
                 print("Update ", filter)
                 # Remove the 'created_date' key from the dictionary
@@ -277,14 +276,14 @@ def current_employer_process():
     # Close the connection    
     mongodb.close()
     
-    print('Start to crawl')
+    # print('Start to crawl')
     with multiprocessing.Pool(2) as pool:
         # parallel the scapring process
         pool.map(crawl_employer_worker, employer_url_generator())
  
 def check_url_worker(url):
     url_name = url[len('https://careerviet.vn/vi/nha-tuyen-dung/') -1 : len('https://careerviet.vn/vi/nha-tuyen-dung/')]
-    print(url_name)
+    # print(url_name)
     if url_name in 'c':
         return 1
     return 2
