@@ -247,11 +247,14 @@ def employer_url_generator_airflow(worker):
     # Projecttion: select only the "job_url" field
     projection = {"_id": False, "employer_url": True}
     cursor = mongodb.select(filter, projection)
-    
+    count = 0
     # Extract job_url
     for document in cursor: 
         print(document["employer_url"])
-        crawl_employer_worker(document["employer_url"])    
+        crawl_employer_worker(document["employer_url"])  
+        count += 1
+        if  count > 100:
+            break
         # break
     # Close the connection    
     mongodb.close()
@@ -292,6 +295,7 @@ def load_employer_sitemap_into_postgres():
     mongodb = connect_mongodb()
     mongodb.set_collection(conn['cv_employer_sitemap']) 
     cursor = mongodb.select()
+    
     return 
        
 # if __name__ == "__main__":  

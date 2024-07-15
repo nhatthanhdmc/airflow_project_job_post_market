@@ -384,12 +384,14 @@ def job_url_generator_airflow(worker):
     # Projecttion: select only the "job_url" field
     projection = {"_id": False, "job_url": True}
     cursor = mongodb.select(filter, projection)
-    
+    count = 0
     # Extract job_url
     for document in cursor:
         print(document["job_url"])
         crawl_job_post_worker(document["job_url"]) 
-        # break   
+        count += 1
+        if  count > 100:
+            break   
     # Close the connection    
     mongodb.close()
     
