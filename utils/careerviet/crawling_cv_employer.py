@@ -4,13 +4,11 @@ import multiprocessing.pool
 import os
 import sys 
 import json
-# module_path = os.path.abspath(os.getcwd())
-# if module_path not in sys.path:
-#     sys.path.append(module_path)
 import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from utils.mongodb_connection import MongoDB
+from utils.postgres_connection import PostgresDB
 from utils import config as cfg
 from datetime import date
 import re
@@ -27,7 +25,8 @@ mongodb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
-conn = cfg.mongodb['CRAWLING']
+mongo_conn = cfg.mongodb['CRAWLING']
+postgres_conn = cfg.mongodb['DWH']
 
 def connect_mongodb():   
     """
@@ -35,12 +34,12 @@ def connect_mongodb():
     Args: None
     Returns: mongodb
     """      
-    mongodb = MongoDB(  dbname = conn['dbname'], 
-                        collection_name = conn['cv_employer_sitemap'],
-                        host = conn['host'], 
-                        port = conn['port'], 
-                        username = conn['username'], 
-                        password = conn['password']
+    mongodb = MongoDB(  dbname = mongo_conn['dbname'], 
+                        collection_name = mongo_conn['cv_employer_sitemap'],
+                        host = mongo_conn['host'], 
+                        port = mongo_conn['port'], 
+                        username = mongo_conn['username'], 
+                        password = mongo_conn['password']
                     )
     mongodb.connect()
     
@@ -192,7 +191,7 @@ def crawl_employer_worker(url):
                 }      
                                
             mongodb = connect_mongodb()    
-            mongodb.set_collection(conn['cv_employer_detail'])
+            mongodb.set_collection(mongo_conn['cv_employer_detail'])
             
             # check employ_id exist or not
             filter = {"employer_id": employer_id}
@@ -218,7 +217,7 @@ def employer_url_generator():
     Returns: employer url
     """  
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_employer_sitemap'])
+    mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
     # Filter
     filter = {"created_date": today}
     # Projecttion: select only the "job_url" field
@@ -241,7 +240,7 @@ def employer_url_generator_airflow(worker):
     Returns: employer url
     """  
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_employer_sitemap'])
+    mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
     # Filter
     filter = {"lastmod": today, "worker": worker}
     # Projecttion: select only the "job_url" field
@@ -258,7 +257,7 @@ def employer_url_generator_airflow(worker):
         # break
     # Close the connection    
     mongodb.close()
-  
+ 
 def current_employer_process():
     """
     Process the pipeline to crawl and store data of employer url into mongodb
@@ -267,7 +266,7 @@ def current_employer_process():
     Returns: 
     """ 
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_employer_detail'])    
+    mongodb.set_collection(mongo_conn['cv_employer_detail'])    
      # Delete current data
     delete_filter = {
                     "$or": [
@@ -291,10 +290,44 @@ def check_url_worker(url):
         return 1
     return 2
 
+def connect_postgresdb():   
+    """
+    Return a connection to postgresdb
+    Args: None
+    Returns: postgresdb
+    """      
+    postgresdb = PostgresDB(    dbname = postgres_conn['dbname'], 
+                                host = postgres_conn['host'], 
+                                port = postgres_conn['port'], 
+                                username = postgres_conn['username'], 
+                                password = postgres_conn['password']
+                    )
+    postgresdb.connect()
+    
+    return postgresdb
+
 def load_employer_sitemap_into_postgres():
-    mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_employer_sitemap']) 
-    cursor = mongodb.select()
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_employer_sitemap']) 
+        employer_docs = mongodb.select()
+        
+        postgresdb = connect_postgresdb()
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc)
+            
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        if mongodb:
+            mongodb.rollback()
+        if postgresdb:
+            postgresdb.rollback()
+        print(f"Error transferring data: {e}")        
     
     return 
        
@@ -309,7 +342,7 @@ def load_employer_sitemap_into_postgres():
 
 
 # mongodb = connect_mongodb()
-# mongodb.set_collection(conn['cv_employer_detail'])
+# mongodb.set_collection(mongo_conn['cv_employer_detail'])
 #     # Delete duplicates based on specified key fields
 # key_fields = ["employer_id"]  # Fields to identify duplicates
 # condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
