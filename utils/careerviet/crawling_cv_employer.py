@@ -26,7 +26,7 @@ mongodb = None
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
-postgres_conn = cfg.mongodb['DWH']
+postgres_conn = cfg.postgres['DWH']
 
 def connect_mongodb():   
     """
@@ -299,10 +299,10 @@ def connect_postgresdb():
     postgresdb = PostgresDB(    dbname = postgres_conn['dbname'], 
                                 host = postgres_conn['host'], 
                                 port = postgres_conn['port'], 
-                                username = postgres_conn['username'], 
+                                user = postgres_conn['username'], 
                                 password = postgres_conn['password']
                     )
-    postgresdb.connect()
+    postgresdb.initialize_pool()
     
     return postgresdb
 
@@ -314,23 +314,52 @@ def load_employer_sitemap_into_postgres():
         employer_docs = mongodb.select()
         
         postgresdb = connect_postgresdb()
+        print(postgres_conn["cv_employer_sitemap"])
         for doc in employer_docs:
             doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
-            postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc)
+            print(doc)
+            # postgresdb.insert(postgres_conn["cv_employer_sitemap"], doc)
             
         # close connection
         mongodb.close()
         postgresdb.close_pool()
         print("Data transferred successfully")
     except Exception as e:
-        if mongodb:
-            mongodb.rollback()
-        if postgresdb:
-            postgresdb.rollback()
         print(f"Error transferring data: {e}")        
     
-    return 
-       
+def load_employer_detail_into_postgres():
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_employer_detail']) 
+        employer_docs = mongodb.select()
+        
+        postgresdb = connect_postgresdb()
+        # print(postgres_conn["cv_employer_detail"])
+        # for doc in employer_docs:
+        #     doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+        #     # print(doc)
+        #     postgresdb.insert(postgres_conn["cv_employer_detail"], doc)
+        #     break
+        doc = {
+            "employer_id" : "2",
+            "employer_name": 'b'
+        }
+        postgresdb.insert(postgres_conn["cv_employer_detail"], doc)  
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")        
+    
+ 
+if __name__ == "__main__":  
+    load_employer_detail_into_postgres()
+    # postgresdb = connect_postgresdb()
+    # data=postgresdb.select(postgres_conn["cv_employer_detail"])
+    # print(data)
+     
 # if __name__ == "__main__":  
 #     # Process site map process
 #     employer_sitemap_process()

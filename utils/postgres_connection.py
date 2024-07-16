@@ -53,7 +53,9 @@ class PostgresDB:
         try:
             cursor = conn.cursor()
             columns = data.keys()
+            print(columns)
             values = [data[column] for column in columns]
+            print(values)
             insert_statement = sql.SQL(
                 "INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING id"
             ).format(
@@ -61,6 +63,7 @@ class PostgresDB:
                 fields=sql.SQL(', ').join(map(sql.Identifier, columns)),
                 values=sql.SQL(', ').join(sql.Placeholder() * len(values))
             )
+            print(insert_statement)
             cursor.execute(insert_statement, values)
             conn.commit()
             inserted_id = cursor.fetchone()[0]
