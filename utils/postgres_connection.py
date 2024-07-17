@@ -52,17 +52,14 @@ class PostgresDB:
             return None
         try:
             cursor = conn.cursor()
-            columns = data.keys()
-            print(columns)
+            columns = data.keys()            
             values = [data[column] for column in columns]
-            print(values)
-            insert_statement = sql.SQL(
-                "INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING id"
-            ).format(
-                table=sql.Identifier(table),
-                fields=sql.SQL(', ').join(map(sql.Identifier, columns)),
-                values=sql.SQL(', ').join(sql.Placeholder() * len(values))
-            )
+            
+            insert_statement = f"""
+                    INSERT INTO {table} ({', '.join(columns)}) 
+                    VALUES ({', '.join(['%s'] * len(values))})
+                """
+                
             print(insert_statement)
             cursor.execute(insert_statement, values)
             conn.commit()

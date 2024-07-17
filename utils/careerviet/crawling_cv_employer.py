@@ -345,7 +345,7 @@ def load_employer_detail_into_postgres():
             "employer_id" : "2",
             "employer_name": 'b'
         }
-        postgresdb.insert(postgres_conn["cv_employer_detail"], doc)  
+        postgresdb.insert("stg.cv_employer_detail", doc)  
         # close connection
         mongodb.close()
         postgresdb.close_pool()
