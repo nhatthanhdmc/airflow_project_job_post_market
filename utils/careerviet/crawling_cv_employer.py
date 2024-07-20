@@ -350,7 +350,7 @@ def load_employer_detail_into_postgres():
 def daily_load_employer_detail_into_postgres():     
     # 1. truncate 
     postgresdb = connect_postgresdb()
-    postgresdb.delete
+    postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
     postgresdb.close_pool()
     # 2. load full 
     load_employer_detail_into_postgres()
