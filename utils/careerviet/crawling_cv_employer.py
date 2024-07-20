@@ -335,27 +335,38 @@ def load_employer_detail_into_postgres():
         employer_docs = mongodb.select()
         
         postgresdb = connect_postgresdb()
-        # print(postgres_conn["cv_employer_detail"])
-        # for doc in employer_docs:
-        #     doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
-        #     # print(doc)
-        #     postgresdb.insert(postgres_conn["cv_employer_detail"], doc)
-        #     break
-        doc = {
-            "employer_id" : "2",
-            "employer_name": 'b'
-        }
-        postgresdb.insert("stg.cv_employer_detail", doc)  
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["cv_employer_detail"], doc, "employer_id")
+            print("Inserting employer_id: ", inserted_id)
+       
         # close connection
         mongodb.close()
         postgresdb.close_pool()
         print("Data transferred successfully")
     except Exception as e:
-        print(f"Error transferring data: {e}")        
-    
- 
-if __name__ == "__main__":  
+        print(f"Error transferring data: {e}")   
+        
+def daily_load_employer_detail_into_postgres():     
+    # 1. truncate 
+    postgresdb = connect_postgresdb()
+    postgresdb.delete
+    postgresdb.close_pool()
+    # 2. load full 
     load_employer_detail_into_postgres()
+ 
+def delete_duplicate_employer_detail():
+    mongodb = connect_mongodb()
+    mongodb.set_collection(mongo_conn['cv_employer_detail'])
+        # Delete duplicates based on specified key fields
+    key_fields = ["employer_id"]  # Fields to identify duplicates
+    condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
+    mongodb.delete_duplicates_with_condition(key_fields, condition)
+    mongodb.close()   
+ 
+# if __name__ == "__main__":  
+    # load_employer_detail_into_postgres()
+    # delete_duplicate_employer_detail()
     # postgresdb = connect_postgresdb()
     # data=postgresdb.select(postgres_conn["cv_employer_detail"])
     # print(data)
@@ -370,10 +381,3 @@ if __name__ == "__main__":
     
 
 
-# mongodb = connect_mongodb()
-# mongodb.set_collection(mongo_conn['cv_employer_detail'])
-#     # Delete duplicates based on specified key fields
-# key_fields = ["employer_id"]  # Fields to identify duplicates
-# condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
-# mongodb.delete_duplicates_with_condition(key_fields, condition)
-# mongodb.close()

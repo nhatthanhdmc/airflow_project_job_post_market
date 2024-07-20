@@ -436,6 +436,7 @@ def check_url_worker(url):
     return 2
           
 # if __name__ == "__main__":  
+    # delete_duplicate_job_post_detail()
 #     # Process sitemap
 #     job_post_sitemap_process()     
     

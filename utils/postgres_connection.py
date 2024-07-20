@@ -46,7 +46,7 @@ class PostgresDB:
         except Exception as e:
             print(f"Error returning connection to pool: {e}")
 
-    def insert(self, table, data):
+    def insert(self, table, data, id_name):
         conn = self.get_connection()
         if not conn:
             return None
@@ -54,13 +54,11 @@ class PostgresDB:
             cursor = conn.cursor()
             columns = data.keys()            
             values = [data[column] for column in columns]
-            
             insert_statement = f"""
                     INSERT INTO {table} ({', '.join(columns)}) 
                     VALUES ({', '.join(['%s'] * len(values))})
-                """
-                
-            print(insert_statement)
+                    RETURNING {id_name}
+                """                
             cursor.execute(insert_statement, values)
             conn.commit()
             inserted_id = cursor.fetchone()[0]
@@ -136,6 +134,23 @@ class PostgresDB:
         except Exception as e:
             print(f"Error selecting data: {e}")
             return None
+        finally:
+            self.put_connection(conn)
+            
+    def truncate_table(self, table):
+        conn = self.get_connection()
+        if not conn:
+            return None
+        try:
+            cursor = conn.cursor()
+            truncate_statement = f"TRUNCATE TABLE {table}"
+            cursor.execute(truncate_statement)
+            conn.commit()
+            cursor.close()
+            print(f"Table {table} truncated successfully")
+        except Exception as e:
+            conn.rollback()
+            print(f"Error truncating table: {e}")
         finally:
             self.put_connection(conn)
 
