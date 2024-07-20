@@ -45,7 +45,7 @@ def cv_employer_detail(worker):
     cv_emp.employer_url_generator_airflow(worker)
     
 def etl_cv_employer_detail_postgres():
-    print("ETL company detail to postgres")      
+    cv_emp.daily_load_employer_detail_into_postgres()     
     
 # [START instantiate_dag]
 with DAG(
@@ -96,7 +96,7 @@ with DAG(
             python_callable=cv_employer_detail,
             op_kwargs={'worker': worker}
         )
-        t_cv_employer_sitemap >> call_employer_detail >> t_etl_cv_employer_detail_postgres
+        t_cv_employer_sitemap >> call_employer_detail >> t_etl_cv_employer_detail_postgres 
     
     
     for worker in [1, 2]:
