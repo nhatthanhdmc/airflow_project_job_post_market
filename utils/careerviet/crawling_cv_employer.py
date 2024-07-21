@@ -306,7 +306,7 @@ def connect_postgresdb():
     
     return postgresdb
 
-def load_employer_sitemap_into_postgres():
+def load_employer_sitemap_to_postgres():
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -326,8 +326,38 @@ def load_employer_sitemap_into_postgres():
         print("Data transferred successfully")
     except Exception as e:
         print(f"Error transferring data: {e}")        
+ 
+def load_employer_sitemap_into_postgres():
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_employer_sitemap']) 
+        filter = {"created_date": today}
+        employer_docs = mongodb.select(filter)
+        
+        postgresdb = connect_postgresdb()
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["cv_employer_sitemap"], doc, "employer_id")
+            print("Inserting employer_id: ", inserted_id)
+       
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")   
+        
+def daily_load_employer_sitemap_to_postgres():     
+    # 1. delete t-1 
+    postgresdb = connect_postgresdb()
+    postgresdb.delete(postgres_conn["cv_employer_sitemap"], f"created_date = {today}")
+    postgresdb.close_pool()
+    # 2. load t-1 
+    load_employer_sitemap_to_postgres()
+
     
-def load_employer_detail_into_postgres():
+def load_employer_detail_to_postgres():
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -347,14 +377,15 @@ def load_employer_detail_into_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}")   
         
-def daily_load_employer_detail_into_postgres():     
+def daily_load_employer_detail_to_postgres():     
     # 1. truncate 
     postgresdb = connect_postgresdb()
     postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
     postgresdb.close_pool()
     # 2. load full 
-    load_employer_detail_into_postgres()
- 
+    load_employer_detail_to_postgres()
+
+    
 def delete_duplicate_employer_detail():
     mongodb = connect_mongodb()
     mongodb.set_collection(mongo_conn['cv_employer_detail'])
@@ -365,7 +396,8 @@ def delete_duplicate_employer_detail():
     mongodb.close()   
  
 # if __name__ == "__main__":  
-    # load_employer_detail_into_postgres()
+    # daily_load_employer_sitemap_to_postgres()
+    # load_employer_detail_to_postgres()
     # delete_duplicate_employer_detail()
     # postgresdb = connect_postgresdb()
     # data=postgresdb.select(postgres_conn["cv_employer_detail"])

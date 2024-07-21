@@ -17,6 +17,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 from utils.mongodb_connection import MongoDB
+from utils.postgres_connection import PostgresDB
 from utils import config as cfg
 from datetime import date
 import re
@@ -35,8 +36,8 @@ mongodb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
-
-conn = cfg.mongodb['CRAWLING']
+mongo_conn = cfg.mongodb['CRAWLING']
+postgres_conn = cfg.postgres['DWH']
 
 def connect_mongodb():   
     """
@@ -44,16 +45,31 @@ def connect_mongodb():
     Args: None
     Returns: mongodb
     """      
-    mongodb = MongoDB(  dbname = conn['dbname'], 
-                        collection_name = conn['cv_job_post_sitemap'],
-                        host = conn['host'], 
-                        port = conn['port'], 
-                        username = conn['username'], 
-                        password = conn['password']
+    mongodb = MongoDB(  dbname = mongo_conn['dbname'], 
+                        collection_name = mongo_conn['cv_job_post_sitemap'],
+                        host = mongo_conn['host'], 
+                        port = mongo_conn['port'], 
+                        username = mongo_conn['username'], 
+                        password = mongo_conn['password']
                     )
     mongodb.connect()    
     return mongodb
   
+def connect_postgresdb():   
+    """
+    Return a connection to postgresdb
+    Args: None
+    Returns: postgresdb
+    """      
+    postgresdb = PostgresDB(    dbname = postgres_conn['dbname'], 
+                                host = postgres_conn['host'], 
+                                port = postgres_conn['port'], 
+                                user = postgres_conn['username'], 
+                                password = postgres_conn['password']
+                    )
+    postgresdb.initialize_pool()
+    
+    return postgresdb
 
 def crawl_job_post_sitemap(url):
     """
@@ -329,21 +345,22 @@ def crawl_job_post_worker(url):
             mongodb = connect_mongodb()    
             mongodb.set_collection(conn['cv_job_post_detail'])
             
-            filter = {"job_id": job["job_id"]}
-            
-            if len(mongodb.select(filter)) > 0:
-                print("Update ", filter)
-                # Remove the 'created_date' key from the dictionary
-                if "created_date" in job:
-                    del job["created_date"]
-                mongodb.update_one(filter, job)
-            else:
-                print("Insert ", filter)
-                mongodb.insert_one(job)
-             
-            # Close the connection    
-            mongodb.close()            
-            # time.sleep(1) 
+            if job:
+                filter = {"job_id": job["job_id"]}
+                
+                if len(mongodb.select(filter)) > 0:
+                    print("Update ", filter)
+                    # Remove the 'created_date' key from the dictionary
+                    if "created_date" in job:
+                        del job["created_date"]
+                    mongodb.update_one(filter, job)
+                else:
+                    print("Insert ", filter)
+                    mongodb.insert_one(job)
+                
+                # Close the connection    
+                mongodb.close()            
+                # time.sleep(1) 
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")
      
@@ -434,8 +451,67 @@ def check_url_worker(url):
     if url_name in 'abcdefghigkl':
         return 1
     return 2
-          
-# if __name__ == "__main__":  
+     
+def load_job_post_sitemap_to_postgres():
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_job_post_sitemap']) 
+        filter = {"created_date": today}
+        employer_docs = mongodb.select(filter)
+        
+        postgresdb = connect_postgresdb()
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")
+            print("Inserting job_id: ", inserted_id)
+       
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")        
+
+def daily_load_job_post_sitemap_to_postgres():     
+    # 1. delete t-1 
+    postgresdb = connect_postgresdb()
+    postgresdb.delete(postgres_conn["cv_job_post_sitemap"], f"created_date = {today}")
+    postgresdb.close_pool()
+    # 2. load t-1 
+    load_job_post_sitemap_to_postgres()
+ 
+def load_job_post_detail_to_postgres():
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_job_post_detail']) 
+        filter = {"created_date": today}
+        employer_docs = mongodb.select(filter)
+        
+        postgresdb = connect_postgresdb()
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["cv_job_post_detail"], doc, "job_id")
+            print("Inserting job_id: ", inserted_id)
+       
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")        
+
+def daily_load_job_post_detail_to_postgres():     
+    # 1. delete t-1 
+    postgresdb = connect_postgresdb()
+    postgresdb.delete(postgres_conn["cv_job_post_detail"], f"created_date = {today}")
+    postgresdb.close_pool()
+    # 2. load t-1 
+    load_job_post_sitemap_to_postgres()
+       
+if __name__ == "__main__":  
+    load_job_post_detail_to_postgres()
     # delete_duplicate_job_post_detail()
 #     # Process sitemap
 #     job_post_sitemap_process()     
