@@ -327,7 +327,7 @@ def load_employer_sitemap_to_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}")        
  
-def load_employer_sitemap_into_postgres():
+def employer_sitemap_to_postgres():
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -348,16 +348,16 @@ def load_employer_sitemap_into_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}")   
         
-def daily_load_employer_sitemap_to_postgres():     
+def daily_employer_sitemap_to_postgres():     
     # 1. delete t-1 
     postgresdb = connect_postgresdb()
     postgresdb.delete(postgres_conn["cv_employer_sitemap"], f"created_date = {today}")
     postgresdb.close_pool()
     # 2. load t-1 
-    load_employer_sitemap_to_postgres()
+    employer_sitemap_to_postgres()
 
     
-def load_employer_detail_to_postgres():
+def employer_detail_to_postgres():
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -377,13 +377,13 @@ def load_employer_detail_to_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}")   
         
-def daily_load_employer_detail_to_postgres():     
+def daily_employer_detail_to_postgres():     
     # 1. truncate 
     postgresdb = connect_postgresdb()
     postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
     postgresdb.close_pool()
     # 2. load full 
-    load_employer_detail_to_postgres()
+    employer_detail_to_postgres()
 
     
 def delete_duplicate_employer_detail():

@@ -44,8 +44,11 @@ def cv_employer_sitemap():
 def cv_employer_detail(worker):
     cv_emp.employer_url_generator_airflow(worker)
     
-def etl_cv_employer_detail_postgres():
-    cv_emp.daily_load_employer_detail_into_postgres()     
+def daily_cv_employer_sitemap_to_postgres():
+    cv_emp.daily_employer_sitemap_to_postgres()     
+    
+def daily_cv_employer_detail_to_postgres():
+    cv_emp.daily_employer_detail_into_postgres()     
     
 # [START instantiate_dag]
 with DAG(
@@ -82,10 +85,15 @@ with DAG(
         task_id="cv_employer_sitemap",
         python_callable=cv_employer_sitemap
     )
-               
-    t_etl_cv_employer_detail_postgres = PythonOperator(
-        task_id="etl_cv_employer_detail_postgres",
-        python_callable=etl_cv_employer_detail_postgres
+    
+    t_daily_cv_employer_detail_to_postgres = PythonOperator(
+        task_id="daily_cv_employer_detail_to_postgres",
+        python_callable=daily_cv_employer_detail_to_postgres
+    )
+             
+    t_daily_cv_employer_detail_to_postgres = PythonOperator(
+        task_id="daily_cv_employer_detail_to_postgres",
+        python_callable=daily_cv_employer_detail_to_postgres
     )
     
     # [END jinja_template]
@@ -96,7 +104,7 @@ with DAG(
             python_callable=cv_employer_detail,
             op_kwargs={'worker': worker}
         )
-        t_cv_employer_sitemap >> call_employer_detail >> t_etl_cv_employer_detail_postgres 
+        t_cv_employer_sitemap >> call_employer_detail >> t_daily_cv_employer_detail_to_postgres 
     
     
     for worker in [1, 2]:
