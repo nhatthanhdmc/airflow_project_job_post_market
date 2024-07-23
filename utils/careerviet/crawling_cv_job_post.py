@@ -186,7 +186,7 @@ def crawl_job_post_template1(soup, url):
         if tr.find('em', class_='fa-calendar-times-o'):
             deadline = tr.find('td', class_='content').find('p').text.strip()
         if tr.find('em', class_='fa-calendar'):
-            updated_date = tr.find('td', class_='content').find('p').text.strip()
+            updated_date_on_web = tr.find('td', class_='content').find('p').text.strip()
         
     # PART 1: BOTTOM
     bottom = soup.find('div', class_='bottom-template').find('div', class_='full-content')
@@ -203,7 +203,7 @@ def crawl_job_post_template1(soup, url):
         "job_url": url,
         "job_title": job_title,
         "company_url": company_url,
-        "updated_date": updated_date,
+        "updated_date_on_web": updated_date_on_web,
         "industry": industry,
         "job_type": job_type,
         "salary": salary,
@@ -259,7 +259,7 @@ def crawl_job_post_template2(soup, url):
             # updated_date
             if li.find('em', class_='mdi-update'):
                 if li.find('em', class_='mdi-update').find_parent('li').find('p'):
-                    updated_date = li.find('em', class_='mdi-update').find_parent('li').find('p').text.strip()
+                    updated_date_on_web = li.find('em', class_='mdi-update').find_parent('li').find('p').text.strip()
             # industry
             if li.find('em', class_='mdi-briefcase'):
                 if li.find('em', class_='mdi-briefcase').find_parent('li').find('p'):
@@ -298,7 +298,7 @@ def crawl_job_post_template2(soup, url):
         "job_title": job_title,
         "company_url": company_url,
         "location": location,
-        "updated_date": updated_date,
+        "updated_date_on_web": updated_date_on_web,
         "industry": industry,
         "job_type": job_type,
         "salary": salary,
@@ -343,7 +343,7 @@ def crawl_job_post_worker(url):
                 job = crawl_job_post_template1(soup, url)
             
             mongodb = connect_mongodb()    
-            mongodb.set_collection(conn['cv_job_post_detail'])
+            mongodb.set_collection(mongo_conn['cv_job_post_detail'])
             
             if job:
                 filter = {"job_id": job["job_id"]}
@@ -372,7 +372,7 @@ def job_url_generator():
     Returns: job url
     """  
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_job_post_sitemap'])
+    mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
     # Filter
     filter = {"created_date": today}
     # Projecttion: select only the "job_url" field
@@ -395,7 +395,7 @@ def job_url_generator_airflow(worker):
     Returns: job url
     """  
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_job_post_sitemap'])
+    mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
     # Filter
     filter = {"created_date": today, "worker": worker}
     # Projecttion: select only the "job_url" field
@@ -420,7 +420,7 @@ def current_job_post_process():
     Returns: 
     """ 
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_job_post_detail'])    
+    mongodb.set_collection(mongo_conn['cv_job_post_detail'])    
      # Delete current data
     delete_filter = {
                     "$or": [
@@ -438,7 +438,7 @@ def current_job_post_process():
     
 def delete_duplicate_job_post_detail():
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_job_post_detail'])
+    mongodb.set_collection(mongo_conn['cv_job_post_detail'])
      # Delete duplicates based on specified key fields
     key_fields = ["job_id", "job_title"]  # Fields to identify duplicates
     condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
@@ -486,8 +486,7 @@ def load_job_post_detail_to_postgres():
     try:
         mongodb = connect_mongodb()
         mongodb.set_collection(mongo_conn['cv_job_post_detail']) 
-        filter = {"created_date": today}
-        employer_docs = mongodb.select(filter)
+        employer_docs = mongodb.select()
         
         postgresdb = connect_postgresdb()
         for doc in employer_docs:
@@ -503,15 +502,15 @@ def load_job_post_detail_to_postgres():
         print(f"Error transferring data: {e}")        
 
 def daily_load_job_post_detail_to_postgres():     
-    # 1. delete t-1 
+    # 1. truncate
     postgresdb = connect_postgresdb()
-    postgresdb.delete(postgres_conn["cv_job_post_detail"], f"created_date = {today}")
+    postgresdb.truncate_table(postgres_conn["cv_job_post_detail"])
     postgresdb.close_pool()
     # 2. load t-1 
-    load_job_post_sitemap_to_postgres()
-       
-if __name__ == "__main__":  
     load_job_post_detail_to_postgres()
+       
+if __name__ == "__main__": 
+    daily_load_job_post_detail_to_postgres() 
     # delete_duplicate_job_post_detail()
 #     # Process sitemap
 #     job_post_sitemap_process()     
@@ -526,7 +525,7 @@ if __name__ == "__main__":
     
     
 # mongodb = connect_mongodb()
-# mongodb.set_collection(conn['cv_job_post_detail'])
+# mongodb.set_collection(mongo_conn['cv_job_post_detail'])
 #     # Delete duplicates based on specified key fields
 # key_fields = ["job_id", "job_title"]  # Fields to identify duplicates
 # condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
