@@ -35,9 +35,6 @@ def cv_job_post_sitemap():
 def cv_job_post_detail(worker):
     cv_jp.job_url_generator_airflow(worker)
     
-def etl_cv_jp_detail_postgres():
-    print("ETL job post detail to postgres")
-    
 def cv_employer_sitemap():
     cv_emp.employer_sitemap_process()
     
@@ -48,8 +45,14 @@ def daily_cv_employer_sitemap_to_postgres():
     cv_emp.daily_employer_sitemap_to_postgres()     
     
 def daily_cv_employer_detail_to_postgres():
-    cv_emp.daily_employer_detail_into_postgres()     
+    cv_emp.daily_employer_detail_to_postgres()     
+  
+def daily_cv_jp_sitemap_to_postgres():
+    cv_jp.daily_load_job_post_sitemap_to_postgres()     
     
+def daily_cv_jp_detail_to_postgres():
+    cv_jp.daily_load_job_post_detail_to_postgres()     
+      
 # [START instantiate_dag]
 with DAG(
     "python_crawling_job_post",
@@ -75,44 +78,57 @@ with DAG(
         task_id="cv_job_post_sitemap",
         python_callable=cv_job_post_sitemap
     )
-    
-    t_etl_cv_jp_detail_postgres = PythonOperator(
-        task_id="etl_cv_jp_detail_postgres",
-        python_callable=etl_cv_jp_detail_postgres
-    )    
         
     t_cv_employer_sitemap = PythonOperator(
         task_id="cv_employer_sitemap",
         python_callable=cv_employer_sitemap
     )
     
-    t_daily_cv_employer_detail_to_postgres = PythonOperator(
-        task_id="daily_cv_employer_detail_to_postgres",
-        python_callable=daily_cv_employer_detail_to_postgres
+    t_daily_cv_employer_sitemap_to_postgres = PythonOperator(
+        task_id="daily_cv_employer_sitemap_to_postgres",
+        python_callable=daily_cv_employer_sitemap_to_postgres
     )
              
     t_daily_cv_employer_detail_to_postgres = PythonOperator(
         task_id="daily_cv_employer_detail_to_postgres",
         python_callable=daily_cv_employer_detail_to_postgres
-    )
+    )    
     
+    t_daily_cv_jp_sitemap_to_postgres = PythonOperator(
+        task_id="daily_cv_jp_sitemap_to_postgres",
+        python_callable=daily_cv_jp_sitemap_to_postgres
+    )
+             
+    t_daily_cv_jp_detail_to_postgres = PythonOperator(
+        task_id="daily_cv_jp_detail_to_postgres",
+        python_callable=daily_cv_jp_detail_to_postgres
+    )
     # [END jinja_template]
 
+    # Create the call_employer_detail tasks for each worker
     for worker in [1,2]:
         call_employer_detail = PythonOperator(
             task_id= f"cv_employer_detail_{worker}",
             python_callable=cv_employer_detail,
             op_kwargs={'worker': worker}
         )
-        t_cv_employer_sitemap >> call_employer_detail >> t_daily_cv_employer_detail_to_postgres 
-    
-    
+         # Set the task dependencies
+        t_cv_employer_sitemap >> call_employer_detail >> t_daily_cv_employer_detail_to_postgres
+
+    # Ensure t_daily_cv_employer_sitemap_to_postgres runs in parallel with call_employer_detail tasks
+    t_cv_employer_sitemap >> t_daily_cv_employer_sitemap_to_postgres
+
+    # Create the call_employer_detail tasks for each worker
     for worker in [1, 2]:
         call_jp_detail = PythonOperator(
             task_id=f"cv_job_post_detail_{worker}",
             python_callable=cv_job_post_detail,
             op_kwargs={'worker': worker}
         )
-        t_cv_jp_sitemap >> call_jp_detail >> t_etl_cv_jp_detail_postgres
+         # Set the task dependencies
+        t_cv_jp_sitemap >> call_jp_detail >> t_daily_cv_jp_detail_to_postgres
+        
+    # Ensure t_daily_cv_jp_sitemap_to_postgres runs in parallel with call_employer_detail tasks
+    t_cv_jp_sitemap >> t_daily_cv_jp_sitemap_to_postgres
     
 # [END tutorial]
