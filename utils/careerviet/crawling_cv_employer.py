@@ -251,9 +251,9 @@ def employer_url_generator_airflow(worker):
     for document in cursor: 
         print(document["employer_url"])
         crawl_employer_worker(document["employer_url"])  
-        # count += 1
-        # if  count > 500:
-        #     break
+        count += 1
+        if  count > 100:
+            break
         # break
     # Close the connection    
     mongodb.close()
