@@ -322,6 +322,7 @@ def load_employer_sitemap_to_postgres():
             
         # close connection
         mongodb.close()
+        
         print("Data transferred successfully")
     except Exception as e:
         print(f"Error transferring data: {e}")        
@@ -342,6 +343,7 @@ def employer_sitemap_to_postgres():
        
         # close connection
         mongodb.close()
+        
         print("Data transferred successfully")
     except Exception as e:
         print(f"Error transferring data: {e}")   
@@ -350,6 +352,7 @@ def daily_employer_sitemap_to_postgres():
     # 1. delete t-1 
     postgresdb = connect_postgresdb()
     postgresdb.delete(postgres_conn["cv_employer_sitemap"], f"created_date = {today}")
+    
     # 2. load t-1 
     employer_sitemap_to_postgres()
 
@@ -369,6 +372,7 @@ def employer_detail_to_postgres():
        
         # close connection
         mongodb.close()
+        
         print("Data transferred successfully")
     except Exception as e:
         print(f"Error transferring data: {e}")   
@@ -377,6 +381,7 @@ def daily_employer_detail_to_postgres():
     # 1. truncate 
     postgresdb = connect_postgresdb()
     postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
+    
     # 2. load full 
     employer_detail_to_postgres()
 
