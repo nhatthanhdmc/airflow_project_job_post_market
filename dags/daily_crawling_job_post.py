@@ -9,11 +9,10 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 import pandas as pd 
-import chardet
 from psycopg2 import sql
-import psycopg2
 import os
 import sys 
+import utils.SlackNotification as slack
 # module_path = os.path.abspath(os.getcwd())
 # if module_path not in sys.path:
 #     sys.path.append(module_path)
@@ -56,13 +55,15 @@ def daily_cv_jp_detail_to_postgres():
 # [START instantiate_dag]
 with DAG(
     "python_crawling_job_post",
-    default_args={
+    default_args={ # đưa context vào từng task
         "depends_on_past": False,
         "email": ["airflow@example.com"],
         "email_on_failure": False,
         "email_on_retry": False,
         "retries": 1,
-        "retry_delay": timedelta(minutes=5)
+        "retry_delay": timedelta(minutes=5),        
+        "on_success_callback": slack.send_slack_success_message,
+        "on_failure_callback": slack.send_slack_failure_message
     },
     # [END default_args]
     description="A simple tutorial DAG",
