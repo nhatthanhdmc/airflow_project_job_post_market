@@ -2,13 +2,15 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List
+import config as cfg
 
+# SMTP settings    
 class EmailSender:
     def __init__(self, smtp_server: str, smtp_port: int, sender_email: str, sender_password: str):
-        self.smtp_server = smtp_server
-        self.smtp_port = smtp_port
-        self.sender_email = sender_email
-        self.sender_password = sender_password
+        self.smtp_server = smtp_server if smtp_server is not None else cfg.smtp["gmail"]["smtp_server"]
+        self.smtp_port = smtp_port if smtp_port is not None else cfg.smtp["gmail"]["smtp_port"]
+        self.sender_email = sender_email if sender_email is not None else cfg.smtp["gmail"]["sender_email"]
+        self.sender_password = sender_password if sender_password is not None else cfg.smtp["gmail"]["sender_password"]
 
     def send_email(self, subject: str, body: str, recipients: List[str]):
         # Tạo MIME message
@@ -27,11 +29,3 @@ class EmailSender:
             print("Email sent successfully!")
         except Exception as e:
             print(f"Failed to send email: {e}")
-
-# Cấu hình EmailSender
-email_sender = EmailSender(
-    smtp_server='smtp.gmail.com',
-    smtp_port=587,
-    sender_email='briannguyen1192@gmail.com',
-    sender_password='Thanh@2495' 
-)

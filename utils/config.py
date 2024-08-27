@@ -1,4 +1,5 @@
 
+# MongoDB Staging setting
 mongodb ={
     "CRAWLING":{
         "dbname"            :   "crawling", 
@@ -18,6 +19,7 @@ mongodb ={
     } 
 }
 
+# Postgres DWH setting
 postgres ={
     "DWH":{
         "dbname"            :   "postgres", 
@@ -35,3 +37,15 @@ postgres ={
         "vnw_employer_detail":"stg.vnw_employer_detail"
     }
 }
+
+# SMTP settings
+smtp = {
+    'gmail': {
+        "smtp_server"	:	"smtp.gmail.com",
+        "smtp_port"	:	"587",
+        "sender_email"	:	"briannguyen1192@gmail.com",
+        "sender_password"	:	"Thanh@2495"
+    }
+}
+
+ 
