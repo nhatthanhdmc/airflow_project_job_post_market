@@ -7,10 +7,10 @@ import config as cfg
 # SMTP settings    
 class EmailSender:
     def __init__(self, smtp_server: str, smtp_port: int, sender_email: str, sender_password: str):
-        self.smtp_server = smtp_server if smtp_server is not None else cfg.smtp["gmail"]["smtp_server"]
-        self.smtp_port = smtp_port if smtp_port is not None else cfg.smtp["gmail"]["smtp_port"]
-        self.sender_email = sender_email if sender_email is not None else cfg.smtp["gmail"]["sender_email"]
-        self.sender_password = sender_password if sender_password is not None else cfg.smtp["gmail"]["sender_password"]
+        self.smtp_server = smtp_server or cfg.smtp["gmail"]["smtp_server"]
+        self.smtp_port = smtp_port or cfg.smtp["gmail"]["smtp_port"]
+        self.sender_email = sender_email or cfg.smtp["gmail"]["sender_email"]
+        self.sender_password = sender_password or cfg.smtp["gmail"]["sender_password"]
 
     def send_email(self, subject: str, body: str, recipients: List[str]):
         # Tạo MIME message
