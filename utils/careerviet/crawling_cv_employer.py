@@ -252,7 +252,7 @@ def employer_url_generator_airflow(worker):
         print(document["employer_url"])
         crawl_employer_worker(document["employer_url"])  
         count += 1
-        if  count > 300:
+        if  count > 3:
             break
         # break
     # Close the connection    
