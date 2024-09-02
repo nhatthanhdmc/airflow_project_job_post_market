@@ -60,7 +60,7 @@ def on_success_callback(context):
     """
     # 1. send an email
     email = smtp.EmailSender(sender_email=None, smtp_port=None, sender_password=None, smtp_server=None)
-    email.send_email(subject=None, body=None, recipients=None, is_success=1)
+    email.send_email(subject=None, body=None, recipients=None, context = context, is_success=1)
     
     # 2. send noti in slack 
     slack.send_slack_success_message(context)
@@ -71,7 +71,7 @@ def on_failure_callback(context):
     """
     # 1. send an email
     email = smtp.EmailSender(sender_email=None, smtp_port=None, sender_password=None, smtp_server=None)
-    email.send_email(subject=None, body=None, recipients=None, is_success=0)
+    email.send_email(subject=None, body=None, recipients=None, context = context, is_success=0)
     
     # 2. send noti in slack 
     slack.send_slack_failure_message(context)
