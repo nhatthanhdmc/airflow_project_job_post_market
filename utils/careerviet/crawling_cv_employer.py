@@ -28,6 +28,8 @@ today = date.today().strftime("%Y-%m-%d")
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
 
+
+
 def connect_mongodb():   
     """
     Return a connection to mongodb

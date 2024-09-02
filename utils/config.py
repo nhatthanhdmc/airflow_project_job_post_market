@@ -42,9 +42,9 @@ postgres ={
 smtp = {
     'gmail': {
         "smtp_server"	:	"smtp.gmail.com",
-        "smtp_port"	:	"587",
+        "smtp_port"	:	587,
         "sender_email"	:	"briannguyen1192@gmail.com",
-        "sender_password"	:	"Thanh@2495"
+        "sender_password"	:	"piyt hfeq igfm zezx"
     }
 }
 

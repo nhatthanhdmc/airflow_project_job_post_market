@@ -13,6 +13,10 @@ from psycopg2 import sql
 import os
 import sys 
 import utils.SlackNotification as slack
+import pendulum
+local_tz = pendulum.timezone("Asia/Ho_Chi_Minh")
+import utils.smtp as smtp
+
 # module_path = os.path.abspath(os.getcwd())
 # if module_path not in sys.path:
 #     sys.path.append(module_path)
@@ -52,6 +56,48 @@ def daily_cv_jp_sitemap_to_postgres():
 def daily_cv_jp_detail_to_postgres():
     cv_jp.daily_load_job_post_detail_to_postgres()     
       
+def on_success_callback(context):
+    """
+    # Callback function to send Slack notification and email when task/DAG succeeds
+    """
+    # 1. send an email
+    email = smtp.EmailSender(sender_email=None, smtp_port=None, sender_password=None, smtp_server=None)
+    
+    task_instance = context.get('task_instance')
+    dag_id = context.get('dag').dag_id
+    task_id = task_instance.task_id
+    execution_date=str(local_tz.convert(context.get('execution_date'))),
+    log_url = task_instance.log_url
+    
+    recipients = ['nnthanh1995@gmail.com', 'nguyentuancong.hcm@gmail.com']
+    subject = f"Task {task_id} (DAG {dag_id}) Task was Success"
+    body = f"Execution time: {execution_date} \n Log URL: {log_url}"
+    
+    email.send_email(body=body, recipients=recipients, subject=subject)
+    
+    # 2. send noti in slack 
+    slack.send_slack_success_message(context)
+  
+def on_failure_callback(context):
+    """
+    # Callback function to send Slack notification and email when task/DAG succeeds
+    """
+    # 1. send an email
+    email = smtp.EmailSender(sender_email=None, smtp_port=None, sender_password=None, smtp_server=None)
+    task_instance = context.get('task_instance')
+    dag_id = context.get('dag').dag_id
+    task_id = task_instance.task_id
+    execution_date=str(local_tz.convert(context.get('execution_date'))),
+    log_url = task_instance.log_url
+    
+    recipients = ['nnthanh1995@gmail.com', 'nguyentuancong.hcm@gmail.com']
+    subject = f"Task {task_id} (DAG {dag_id}) Task was Fail"
+    body = f"Execution time: {execution_date} \n Log URL: {log_url}"
+    email.send_email(body=body, recipients=recipients, subject=subject)
+    
+    # 2. send noti in slack 
+    slack.send_slack_failure_message(context)
+      
 # [START instantiate_dag]
 with DAG(
     "python_crawling_job_post",
@@ -62,11 +108,11 @@ with DAG(
         "email_on_retry": False,
         "retries": 1,
         "retry_delay": timedelta(minutes=5),        
-        "on_success_callback": slack.send_slack_success_message,
-        "on_failure_callback": slack.send_slack_failure_message
+        "on_success_callback": on_success_callback,
+        "on_failure_callback": on_failure_callback
     },
     # [END default_args]
-    description="A simple tutorial DAG",
+    description="A DAG for crawling job post data and loading into DWH",
     schedule=timedelta(days=1),
     start_date=datetime(2021, 1, 1),
     catchup=False,

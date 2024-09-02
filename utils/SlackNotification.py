@@ -2,6 +2,8 @@ from airflow.providers.slack.operators.slack import SlackAPIPostOperator
 import pendulum
 local_tz = pendulum.timezone("Asia/Ho_Chi_Minh")
 
+
+
 # Slack token and channel configuration
 
 SLACK_CONN_ID = 'slack_default'  # Conn ID của Slack mà bạn đã tạo
@@ -31,7 +33,6 @@ def send_slack_success_message(context):
             {mentions} Great job!
         """,
     )
-
     return success_alert.execute(context=context)
 
 def send_slack_failure_message(context):
