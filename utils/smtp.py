@@ -3,6 +3,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import List
 import config as cfg
+import pendulum
+local_tz = pendulum.timezone("Asia/Ho_Chi_Minh")
 
 # SMTP settings    
 class EmailSender:
@@ -12,7 +14,27 @@ class EmailSender:
         self.sender_email = sender_email or cfg.smtp["gmail"]["sender_email"]
         self.sender_password = sender_password or cfg.smtp["gmail"]["sender_password"]
 
-    def send_email(self, subject: str, body: str, recipients: List[str]):
+    def send_email(self, subject: str, body: str, recipients: List[str], context: dict, is_success: int):
+        # Task info
+        task_instance = context.get('task_instance')
+        dag_id = context.get('dag').dag_id
+        task_id = task_instance.task_id
+        execution_date=str(local_tz.convert(context.get('execution_date'))),
+        log_url = task_instance.log_url    
+        exception = context.get('exception')
+        
+        # Contain
+        recipients = ['nnthanh1995@gmail.com', 'nguyentuancong.hcm@gmail.com']
+        if is_success == 1:            
+            subject = f"Task {task_id} (DAG {dag_id}) was SUCCESS"
+        else:
+            subject = f"Task {task_id} (DAG {dag_id}) was FAIL"
+        
+        if exception:
+            body = f"Dear you,\nExecution time: {execution_date} \nLog URL: {log_url}\nBest regards\n"
+        else:
+            body = f"Dear you,\nExecution time: {execution_date} \nException: {exception}\nLog URL: {log_url}\nBest regards\n"
+        
         # Tạo MIME message
         msg = MIMEMultipart()
         msg['From'] = self.sender_email

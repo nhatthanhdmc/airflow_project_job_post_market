@@ -13,8 +13,6 @@ from psycopg2 import sql
 import os
 import sys 
 import utils.SlackNotification as slack
-import pendulum
-local_tz = pendulum.timezone("Asia/Ho_Chi_Minh")
 import utils.smtp as smtp
 
 # module_path = os.path.abspath(os.getcwd())
@@ -62,18 +60,7 @@ def on_success_callback(context):
     """
     # 1. send an email
     email = smtp.EmailSender(sender_email=None, smtp_port=None, sender_password=None, smtp_server=None)
-    
-    task_instance = context.get('task_instance')
-    dag_id = context.get('dag').dag_id
-    task_id = task_instance.task_id
-    execution_date=str(local_tz.convert(context.get('execution_date'))),
-    log_url = task_instance.log_url
-    
-    recipients = ['nnthanh1995@gmail.com', 'nguyentuancong.hcm@gmail.com']
-    subject = f"Task {task_id} (DAG {dag_id}) Task was Success"
-    body = f"Execution time: {execution_date} \n Log URL: {log_url}"
-    
-    email.send_email(body=body, recipients=recipients, subject=subject)
+    email.send_email(is_success=1)
     
     # 2. send noti in slack 
     slack.send_slack_success_message(context)
@@ -84,16 +71,7 @@ def on_failure_callback(context):
     """
     # 1. send an email
     email = smtp.EmailSender(sender_email=None, smtp_port=None, sender_password=None, smtp_server=None)
-    task_instance = context.get('task_instance')
-    dag_id = context.get('dag').dag_id
-    task_id = task_instance.task_id
-    execution_date=str(local_tz.convert(context.get('execution_date'))),
-    log_url = task_instance.log_url
-    
-    recipients = ['nnthanh1995@gmail.com', 'nguyentuancong.hcm@gmail.com']
-    subject = f"Task {task_id} (DAG {dag_id}) Task was Fail"
-    body = f"Execution time: {execution_date} \n Log URL: {log_url}"
-    email.send_email(body=body, recipients=recipients, subject=subject)
+    email.send_email(is_success=0)
     
     # 2. send noti in slack 
     slack.send_slack_failure_message(context)
