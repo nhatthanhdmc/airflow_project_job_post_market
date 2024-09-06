@@ -24,7 +24,7 @@ class EmailSender:
         exception = context.get('exception')
         
         # Contain
-        recipients = ['nnthanh1995@gmail.com', 'nguyentuancong.hcm@gmail.com']
+        recipients = ['nguyentuancong.hcm@gmail.com']
         if is_success == 1:            
             subject = f"Task {task_id} (DAG {dag_id}) was SUCCESS"
         else:
