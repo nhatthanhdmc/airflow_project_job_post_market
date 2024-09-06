@@ -163,7 +163,7 @@ def crawl_employer_worker(url):
             # Crawl job
             soup = BeautifulSoup(response.content, parser) 
             company_info = soup.find('div', class_='company-info')
-            employer = {}  
+            employer = {} 
             
             if company_info:
                 employer_name = company_info.find('h1', class_='name').text.strip() if company_info.find('h1', class_='name') else None
