@@ -71,7 +71,7 @@ def connect_postgresdb():
     
     return postgresdb
 
-def crawl_job_post_sitemap(url):
+def crawl_job_post_sitemap(sitemap_url):
     """
     Reads an XML URL containing URLs and saves them to a JSON file.
     Args:
@@ -83,7 +83,7 @@ def crawl_job_post_sitemap(url):
     """    
     list_url = []
     try:
-        response = requests.get(url = url, 
+        response = requests.get(url = sitemap_url, 
                                 headers = headers)
         
         if response.status_code == 410:
@@ -145,11 +145,11 @@ def job_post_sitemap_process():
     # Close the connection    
     mongodb.close()
     
-def crawl_job_post_template1(soup, url):
+def crawl_job_post_template1(soup, job_url):
     """
     Crawl a job with template 1
     Args: 
-        url (string): job url
+        job_url (string): job url
     Returns: job (json)
     """ 
     # Attribute
@@ -159,7 +159,7 @@ def crawl_job_post_template1(soup, url):
     job_description = job_requirement = more_information = None
     
     pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, url)
+    match = re.search(pattern, job_url)
     if match:
         job_id = match.group(1)    
         
@@ -200,7 +200,7 @@ def crawl_job_post_template1(soup, url):
     
     job = {
         "job_id":job_id,
-        "job_url": url,
+        "job_url": job_url,
         "job_title": job_title,
         "company_url": company_url,
         "updated_date_on_web": updated_date_on_web,
@@ -216,15 +216,15 @@ def crawl_job_post_template1(soup, url):
         "more_information": more_information,
         "created_date": today,
         "updated_date": today,
-        "worker" : check_url_worker(url)
+        "worker" : check_url_worker(job_url)
     }   
     return job
 
-def crawl_job_post_template2(soup, url):
+def crawl_job_post_template2(soup, job_url):
     """
     Crawl a job with template 2
     Args: 
-        url (string): job url
+        job_url (string): job url
     Returns: job (json)
     """ 
     # Attribute
@@ -234,7 +234,7 @@ def crawl_job_post_template2(soup, url):
     job_description = job_requirement = more_information = None
     
     pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, url)
+    match = re.search(pattern, job_url)
     if match:
         job_id = match.group(1)            
     
@@ -294,7 +294,7 @@ def crawl_job_post_template2(soup, url):
                     
     job = {
         "job_id":job_id,
-        "job_url": url,
+        "job_url": job_url,
         "job_title": job_title,
         "company_url": company_url,
         "location": location,
@@ -311,12 +311,12 @@ def crawl_job_post_template2(soup, url):
         "more_information": more_information,
         "created_date": today,
         "updated_date": today,
-        "worker" : check_url_worker(url)
+        "worker" : check_url_worker(job_url)
     }
     # print(job)
     return job
 
-def crawl_job_post_worker(url):
+def crawl_job_post_worker(job_url):
     """
     Crawl a job
     Args: 
@@ -325,7 +325,7 @@ def crawl_job_post_worker(url):
     """ 
     time.sleep(1) 
     try:
-        response = requests.get(    url = url, 
+        response = requests.get(    url = job_url, 
                                     headers=headers)
         parser = 'html.parser'
         if response.status_code == 410:
@@ -338,9 +338,9 @@ def crawl_job_post_worker(url):
             soup = BeautifulSoup(response.content, parser) 
             job = {}  
             if soup.find('section', class_='search-result-list-detail template-2'):
-                job = crawl_job_post_template2(soup, url)
+                job = crawl_job_post_template2(soup, job_url)
             elif soup.find('section', class_='template01-banner'):
-                job = crawl_job_post_template1(soup, url)
+                job = crawl_job_post_template1(soup, job_url)
             
             mongodb = connect_mongodb()    
             mongodb.set_collection(mongo_conn['cv_job_post_detail'])
@@ -446,8 +446,8 @@ def delete_duplicate_job_post_detail():
     mongodb.delete_duplicates_with_condition(key_fields, condition)
     mongodb.close()
  
-def check_url_worker(url):
-    url_name = url[len('https://careerviet.vn/vi/tim-viec-lam/') : len('https://careerviet.vn/vi/tim-viec-lam/') +1]
+def check_url_worker(job_url):
+    url_name = job_url[len('https://careerviet.vn/vi/tim-viec-lam/') : len('https://careerviet.vn/vi/tim-viec-lam/') +1]
     # print(url_name)
     if url_name in 'abcdefghigkl':
         return 1

@@ -1,4 +1,4 @@
-"""sitemap employer của cv chuẩn XML nên có thể dùng thư viện xml.etree.ElementTree
+"""sitemap employer của vnw chuẩn XML nên có thể dùng thư viện xml.etree.ElementTree
 """
 import multiprocessing.pool
 import os
@@ -10,11 +10,13 @@ import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from utils.mongodb_connection import MongoDB
+from utils.postgres_connection import PostgresDB
 from utils import config as cfg
 from datetime import date
 import re
 import time
 import multiprocessing
+import hashlib
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -25,7 +27,9 @@ mongodb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
-conn = cfg.mongodb['CRAWLING']
+
+mongo_conn = cfg.mongodb['CRAWLING']
+postgres_conn = cfg.postgres['DWH']
 
 def connect_mongodb():   
     """
@@ -33,18 +37,18 @@ def connect_mongodb():
     Args: None
     Returns: mongodb
     """      
-    mongodb = MongoDB(  dbname = conn['dbname'], 
-                        collection_name = conn['vnw_employer_sitemap'],
-                        host = conn['host'], 
-                        port = conn['port'], 
-                        username = conn['username'], 
-                        password = conn['password']
+    mongodb = MongoDB(  dbname = mongo_conn['dbname'], 
+                        collection_name = mongo_conn['vnw_employer_sitemap'],
+                        host = mongo_conn['host'], 
+                        port = mongo_conn['port'], 
+                        username = mongo_conn['username'], 
+                        password = mongo_conn['password']
                     )
     mongodb.connect()
     
     return mongodb
 
-def crawl_employer_sitemap(url):
+def crawl_employer_sitemap(sitemap_url):
     """
     Reads an XML URL containing URLs and saves them to a JSON file.
     Args:
@@ -55,9 +59,11 @@ def crawl_employer_sitemap(url):
         List
     """    
     list_url = []
-    pattern = r'\.([A-Z0-9]+)\.html'
+    # Hash the extracted string using SHA256 (you can use MD5 if preferred)
+    hash_object = hashlib.sha256(sitemap_url.encode())
+    employer_id = hash_object.hexdigest()
     try:
-        response = requests.get(url = url, 
+        response = requests.get(url = sitemap_url, 
                                 headers = headers)
         
         if response.status_code == 410:
@@ -77,7 +83,7 @@ def crawl_employer_sitemap(url):
                 lastmod = url.find('ns:lastmod', namespaces)
                 
                 list_url.append({
-                    "employer_id": None,
+                    "employer_id": employer_id,
                     'employer_url': employer_url,
                     'changefreq': changefreq.text.strip() if changefreq is not None else None,
                     'lastmod': lastmod.text.strip() if lastmod is not None else None,
@@ -109,23 +115,56 @@ def employer_sitemap_process():
     
     # Close the connection    
     mongodb.close()
- 
-def crawl_employer_worker(url):
+    
+def connect_postgresdb():   
+    """
+    Return a connection to postgresdb
+    Args: None
+    Returns: postgresdb
+    """      
+    postgresdb = PostgresDB(    dbname = postgres_conn['dbname'], 
+                                host = postgres_conn['host'], 
+                                port = postgres_conn['port'], 
+                                user = postgres_conn['username'], 
+                                password = postgres_conn['password']
+                    )
+    postgresdb.initialize_pool()
+    
+    return postgresdb
+
+   
+def crawl_employer_template1(employer_url):
+    """
+    Crawl employer url with pattern: https://www.vietnamworks.com/company/
+    Args: 
+        employer_url (string): employer url
+    Returns:
+        employer (dict): containt all employer information
+    """
+    employer = {}
+    return employer
+
+def crawl_employer_template2(employer_url):
+    """
+    Crawl employer url with pattern: https://www.vietnamworks.com/nha-tuyen-dung
+    Args: 
+        employer_url (string): employer url
+    Returns:
+        employer (dict): containt all employer information
+    """
+    employer = {}
+    return employer
+
+def crawl_employer_worker(employer_url):
     """
     Crawl a employer
     Args: 
-        url (string): employer url
+        employer_url (string): employer url
     Returns: 
-    """ 
-    time.sleep(1) 
-    employer_id = employer_name = location = company_size = industry = website = about_us = None
-    pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, url)
-    if match:
-        employer_id = match.group(1)
+    """   
         
     try:
-        response = requests.get(    url = url, 
+        response = requests.get(    url = employer_url, 
                                     headers=headers)
         parser = 'html.parser'
         if response.status_code == 410:
@@ -158,10 +197,10 @@ def employer_url_generator():
     Returns: employer url
     """  
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_employer_sitemap'])
+    mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
     # Filter
     filter = {"created_date": today}
-    # Projecttion: select only the "job_url" field
+    # Projecttion: select only the "employer_url" field
     projection = {"_id": False, "employer_url": True}
     cursor = mongodb.select(filter, projection)
     
@@ -182,7 +221,7 @@ def current_employer_process():
     Returns: 
     """ 
     mongodb = connect_mongodb()
-    mongodb.set_collection(conn['cv_employer_detail'])    
+    mongodb.set_collection(mongo_conn['cv_employer_detail'])    
      # Delete current data
     delete_filter = {"created_date": today}
     mongodb.delete_many(delete_filter)

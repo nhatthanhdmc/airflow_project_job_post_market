@@ -136,7 +136,7 @@ def employer_sitemap_process():
     # Close the connection    
     mongodb.close()
  
-def crawl_employer_worker(url):
+def crawl_employer_worker(employer_url):
     """
     Crawl a employer
     Args: 
@@ -146,12 +146,12 @@ def crawl_employer_worker(url):
     time.sleep(1) 
     employer_id = employer_name = location = company_size = industry = website = about_us = None
     pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, url)
+    match = re.search(pattern, employer_url)
     if match:
         employer_id = match.group(1)
         
     try:
-        response = requests.get(    url = url, 
+        response = requests.get(    url = employer_url, 
                                     headers=headers)
         parser = 'html.parser'
         if response.status_code == 410:
@@ -186,10 +186,10 @@ def crawl_employer_worker(url):
                     "industry" : industry,
                     "website" : website,
                     "about_us" : about_us,                
-                    "employer_url": url,
+                    "employer_url": employer_url,
                     "created_date": today,
                     "updated_date": today,
-                    "worker": check_url_worker(url)
+                    "worker": check_url_worker(employer_url)
                 }      
                                
             mongodb = connect_mongodb()    
@@ -285,8 +285,8 @@ def current_employer_process():
         # parallel the scapring process
         pool.map(crawl_employer_worker, employer_url_generator())
  
-def check_url_worker(url):
-    url_name = url[len('https://careerviet.vn/vi/nha-tuyen-dung/'): len('https://careerviet.vn/vi/nha-tuyen-dung/') + 1]
+def check_url_worker(employer_url):
+    url_name = employer_url[len('https://careerviet.vn/vi/nha-tuyen-dung/'): len('https://careerviet.vn/vi/nha-tuyen-dung/') + 1]
     # print(url_name)
     if url_name in 'c':
         return 1
@@ -306,28 +306,7 @@ def connect_postgresdb():
                     )
     postgresdb.initialize_pool()
     
-    return postgresdb
-
-def load_employer_sitemap_to_postgres():
-    mongodb = postgresdb = None
-    try:
-        mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['cv_employer_sitemap']) 
-        employer_docs = mongodb.select()
-        
-        postgresdb = connect_postgresdb()
-        print(postgres_conn["cv_employer_sitemap"])
-        for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
-            print(doc)
-            # postgresdb.insert(postgres_conn["cv_employer_sitemap"], doc)
-            
-        # close connection
-        mongodb.close()
-        
-        print("Data transferred successfully")
-    except Exception as e:
-        print(f"Error transferring data: {e}")        
+    return postgresdb      
  
 def employer_sitemap_to_postgres():
     mongodb = postgresdb = None
