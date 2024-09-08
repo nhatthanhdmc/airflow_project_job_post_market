@@ -24,9 +24,9 @@ import re
 import time
 import multiprocessing
 
-"""
-Global variable
-"""
+###########################################################################
+#### 1. Global variable
+###########################################################################
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Accept-Encoding": "*",
@@ -38,6 +38,10 @@ mongodb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
+
+###########################################################################
+#### 2. Connection
+###########################################################################
 
 def connect_mongodb():   
     """
@@ -70,6 +74,10 @@ def connect_postgresdb():
     postgresdb.initialize_pool()
     
     return postgresdb
+
+###########################################################################
+#### 3. Sitemap process: crawl + load to dwh
+###########################################################################
 
 def crawl_job_post_sitemap(sitemap_url):
     """
@@ -123,7 +131,7 @@ def crawl_job_post_sitemap(sitemap_url):
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")        
 
-def job_post_sitemap_process():
+def daily_job_post_sitemap_process():
     """
     Process the pipeline to crawl and store data of sitemap url into mongodb
     Args: 
@@ -144,6 +152,39 @@ def job_post_sitemap_process():
     
     # Close the connection    
     mongodb.close()
+    
+def load_job_post_sitemap_to_postgres():
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_job_post_sitemap']) 
+        filter = {"created_date": today}
+        employer_docs = mongodb.select(filter)
+        
+        postgresdb = connect_postgresdb()
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")
+            print("Inserting job_id: ", inserted_id)
+       
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")        
+
+def daily_job_post_sitemap_to_postgres():     
+    # 1. delete t-1 
+    postgresdb = connect_postgresdb()
+    postgresdb.delete(postgres_conn["cv_job_post_sitemap"], f"created_date = {today}")
+    postgresdb.close_pool()
+    # 2. load t-1 
+    load_job_post_sitemap_to_postgres()
+ 
+###########################################################################
+#### 4. Job post detail process: crawl + load to dwh
+###########################################################################
     
 def crawl_job_post_template1(soup, job_url):
     """
@@ -387,7 +428,7 @@ def job_url_generator():
     # Close the connection    
     mongodb.close()
 
-def job_url_generator_airflow(worker):    
+def daily_job_url_generator_airflow(worker):    
     """
     Crawl all jobs in sitemap data and store into mongodb using Airflow
     Args: 
@@ -453,35 +494,6 @@ def check_url_worker(job_url):
         return 1
     return 2
      
-def load_job_post_sitemap_to_postgres():
-    mongodb = postgresdb = None
-    try:
-        mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['cv_job_post_sitemap']) 
-        filter = {"created_date": today}
-        employer_docs = mongodb.select(filter)
-        
-        postgresdb = connect_postgresdb()
-        for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
-            inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")
-            print("Inserting job_id: ", inserted_id)
-       
-        # close connection
-        mongodb.close()
-        postgresdb.close_pool()
-        print("Data transferred successfully")
-    except Exception as e:
-        print(f"Error transferring data: {e}")        
-
-def daily_load_job_post_sitemap_to_postgres():     
-    # 1. delete t-1 
-    postgresdb = connect_postgresdb()
-    postgresdb.delete(postgres_conn["cv_job_post_sitemap"], f"created_date = {today}")
-    postgresdb.close_pool()
-    # 2. load t-1 
-    load_job_post_sitemap_to_postgres()
- 
 def load_job_post_detail_to_postgres():
     mongodb = postgresdb = None
     try:
@@ -510,8 +522,8 @@ def daily_load_job_post_detail_to_postgres():
     # 2. load t-1 
     load_job_post_detail_to_postgres()
        
-if __name__ == "__main__": 
-    daily_load_job_post_detail_to_postgres() 
+# if __name__ == "__main__": 
+#     daily_load_job_post_detail_to_postgres() 
     # delete_duplicate_job_post_detail()
 #     # Process sitemap
 #     job_post_sitemap_process()     
@@ -521,8 +533,7 @@ if __name__ == "__main__":
 #     current_job_post_process()
 #     print('Execution time: ', time.time()-start_time)
     
-#     # delete_duplicate_job_post_detail()
-    
+#     # delete_duplicate_job_post_detail()    
     
     
 # mongodb = connect_mongodb()

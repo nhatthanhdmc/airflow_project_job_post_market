@@ -131,7 +131,7 @@ def connect_postgresdb():
     postgresdb.initialize_pool()
     
     return postgresdb
-
+def employer_sitemap_to_postgres():
    
 def crawl_employer_template1(employer_url):
     """
