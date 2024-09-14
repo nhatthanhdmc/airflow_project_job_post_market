@@ -350,7 +350,7 @@ def check_url_worker(employer_url):
         return 1
     return 2
 
-def daily_employer_detail_to_postgres():
+def load_employer_detail_to_postgres():
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -370,13 +370,13 @@ def daily_employer_detail_to_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}")   
         
-def daily_employer_detail_to_postgres():     
+def daily_load_employer_detail_to_postgres():     
     # 1. truncate 
     postgresdb = connect_postgresdb()
     postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
     
     # 2. load full 
-    daily_employer_detail_to_postgres()
+    load_employer_detail_to_postgres()
 
 def delete_duplicate_employer_detail():
     mongodb = connect_mongodb()

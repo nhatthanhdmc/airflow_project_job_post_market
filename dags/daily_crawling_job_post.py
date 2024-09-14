@@ -30,31 +30,32 @@ import utils.careerviet.crawling_cv_employer as cv_emp
 # Python script
 
 # CV
-
+# job post => mongodb
 def daily_cv_job_post_sitemap():
     cv_jp.daily_job_post_sitemap_process()
     
 def daily_cv_job_post_detail(worker):
     cv_jp.daily_job_url_generator_airflow(worker)
-    
+# employer => mongodb  
 def daily_cv_employer_sitemap():
     cv_emp.daily_employer_sitemap_process()
     
 def daily_cv_employer_detail(worker):
     cv_emp.daily_employer_url_generator_airflow(worker)
-    
+# employer => postgres    
 def daily_cv_employer_sitemap_to_postgres():
     cv_emp.daily_employer_sitemap_to_postgres()     
     
 def daily_cv_employer_detail_to_postgres():
-    cv_emp.daily_employer_detail_to_postgres()     
-  
+    cv_emp.daily_load_employer_detail_to_postgres()     
+# jp => postgres  
 def daily_cv_jp_sitemap_to_postgres():
     cv_jp.daily_job_post_sitemap_to_postgres()     
     
 def daily_cv_jp_detail_to_postgres():
     cv_jp.daily_load_job_post_detail_to_postgres()     
-      
+
+#      
 def on_success_callback(context):
     """
     # Callback function to send Slack notification and email when task/DAG succeeds
