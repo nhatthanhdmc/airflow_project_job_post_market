@@ -132,7 +132,7 @@ def connect_postgresdb():
     
     return postgresdb
 def employer_sitemap_to_postgres():
-   
+    return None
 def crawl_employer_template1(employer_url):
     """
     Crawl employer url with pattern: https://www.vietnamworks.com/company/
