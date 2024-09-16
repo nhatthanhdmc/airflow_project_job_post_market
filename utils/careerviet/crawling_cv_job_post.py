@@ -448,7 +448,7 @@ def daily_job_url_generator_airflow(worker):
         print(document["job_url"])
         crawl_job_post_worker(document["job_url"]) 
         count += 1
-        if  count > 30:
+        if  count > 400:
             break
         #     break   
     # Close the connection    
