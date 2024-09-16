@@ -373,7 +373,8 @@ def crawl_job_post_worker(job_url):
             print(f"Warning: XML resource might be unavailable (410 Gone).")
             return  # Exit the function if it's a 410 error
         elif response.status_code != 200:
-            raise Exception(f"Failed to fetch XML: {response.status_code}")
+            
+            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {job_url}")
         elif response.status_code == 200:
             # Crawl job
             soup = BeautifulSoup(response.content, parser) 
