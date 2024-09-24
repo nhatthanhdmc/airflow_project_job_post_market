@@ -196,7 +196,7 @@ def daily_employer_sitemap_to_postgres():
     
 def crawl_employer_worker(employer_url):
     """
-    Crawl a employer
+    Crawl a employer and save to mongodb
     Args: 
         url (string): employer url
     Returns: 
@@ -218,7 +218,7 @@ def crawl_employer_worker(employer_url):
         elif response.status_code != 200:
             raise Exception(f"Failed to fetch XML: {response.status_code}, url is {employer_url}")
         elif response.status_code == 200:
-            # Crawl job
+            # Crawl an employer
             soup = BeautifulSoup(response.content, parser) 
             company_info = soup.find('div', class_='company-info')
             employer = {} 

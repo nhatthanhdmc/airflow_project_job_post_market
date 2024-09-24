@@ -136,17 +136,59 @@ def employer_sitemap_to_postgres():
 def crawl_employer_template1(employer_url):
     """
     Crawl employer url with pattern: https://www.vietnamworks.com/company/
+    Ex: https://www.vietnamworks.com/company/misa
     Args: 
         employer_url (string): employer url
     Returns:
         employer (dict): containt all employer information
     """
     employer = {}
+    employer_id = employer_name = location = company_size = industry = website = about_us = None
+    
+    # Hash the extracted string using SHA256 (you can use MD5 if preferred)
+    hash_object = hashlib.sha256(employer_url.encode())
+    employer_id = hash_object.hexdigest()
+    
+    try:
+        response = requests.get(url=employer_url,
+                                headers= headers)
+        parser = 'html.parser'
+        if response.status_code == 410:
+            print(f"Warning: XML resource might be unavailable (410 Gone).")
+            return  # Exit the function if it's a 410 error
+        elif response.status_code != 200:
+            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {employer_url}")
+        elif response.status_code == 200:
+            # craw an employer
+            soup = BeautifulSoup(response.content, parser) 
+            basic_info = soup.find('div', class_='cp_basic_info_details')
+            if basic_info:
+                employer_name = soup.find('h1', id='cp_company_name').text
+                if soup.find('span', class_='li-items-limit'):
+                    location = soup.find('span', class_='li-items-limit').text.strip
+                
+            employer = {
+                    "employer_id": employer_id,
+                    "employer_name": employer_name,
+                    "location" : location,
+                    "company_size" : company_size,
+                    "industry" : industry,
+                    "website" : website,
+                    "about_us" : about_us,                
+                    "employer_url": employer_url,
+                    "created_date": today,
+                    "updated_date": today,
+                    "worker": check_url_worker(employer_url)
+                }
+            
+    except requests.exceptions.RequestException as e:
+        print( f"Error occurred: {str(e)}")
     return employer
 
 def crawl_employer_template2(employer_url):
     """
     Crawl employer url with pattern: https://www.vietnamworks.com/nha-tuyen-dung
+    Ex: https://www.vietnamworks.com/nha-tuyen-dung/aia-exchange-c383788
     Args: 
         employer_url (string): employer url
     Returns:
@@ -233,10 +275,8 @@ def current_employer_process():
         # parallel the scapring process
         pool.map(crawl_employer_worker, employer_url_generator())
  
-def check_url_worker(url):
-    url_name = url[len('https://careerviet.vn/vi/nha-tuyen-dung/'): len('https://careerviet.vn/vi/nha-tuyen-dung/') + 1]
-    print(url_name)
-    if url_name in 'c':
+def check_url_worker(url):    
+    if 'https://www.vietnamworks.com/nha-tuyen-dung' in url:
         return 1
     return 2
        
