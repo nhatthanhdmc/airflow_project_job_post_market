@@ -80,7 +80,7 @@ def crawl_employer_sitemap(url):
     Raises:
         Exception: If the request fails or the XML parsing fails.           
     Return:
-        List
+        List of sitemap url
     """    
     list_url = []
     pattern = r'\.([A-Z0-9]+)\.html'
@@ -161,7 +161,7 @@ def daily_employer_sitemap_process():
     # Close the connection    
     mongodb.close()
  
-def employer_sitemap_to_postgres():
+def daily_employer_sitemap_to_postgres():     
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -185,15 +185,7 @@ def employer_sitemap_to_postgres():
         
         print("Data transferred successfully")
     except Exception as e:
-        print(f"Error transferring data: {e}")   
-        
-def daily_employer_sitemap_to_postgres():     
-    # 1. delete t-1 
-    postgresdb = connect_postgresdb()
-    postgresdb.delete(postgres_conn["cv_employer_sitemap"], f"created_date = {today}")
-    
-    # 2. load t-1 
-    employer_sitemap_to_postgres()
+        print(f"Error transferring data: {e}")
     
 ###########################################################################
 #### 4. Employer detail process: crawl + load to dwh
@@ -354,15 +346,19 @@ def check_url_worker(employer_url):
     if url_name in 'c':
         return 1
     return 2
-
-def load_employer_detail_to_postgres():
+        
+def daily_load_employer_detail_to_postgres():     
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
         mongodb.set_collection(mongo_conn['cv_employer_detail']) 
+        # load full
         employer_docs = mongodb.select()
         
         postgresdb = connect_postgresdb()
+        # truncate 
+        postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
+        # load full
         for doc in employer_docs:
             doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_employer_detail"], doc, "employer_id")
@@ -370,18 +366,11 @@ def load_employer_detail_to_postgres():
        
         # close connection
         mongodb.close()
+        postgresdb.close_pool()
         
         print("Data transferred successfully")
     except Exception as e:
-        print(f"Error transferring data: {e}")   
-        
-def daily_load_employer_detail_to_postgres():     
-    # 1. truncate 
-    postgresdb = connect_postgresdb()
-    postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
-    
-    # 2. load full 
-    load_employer_detail_to_postgres()
+        print(f"Error transferring data: {e}")
 
 def delete_duplicate_employer_detail():
     mongodb = connect_mongodb()
