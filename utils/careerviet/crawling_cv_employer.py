@@ -24,7 +24,7 @@ headers = {
     "Accept-Encoding": "*",
     "Connection": "keep-alive"
 }
-mongodb = None
+mongodb = postgresdb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
@@ -151,7 +151,7 @@ def daily_employer_sitemap_process():
     sitemap_url = "https://careerviet.vn/sitemap/employer.xml"
     list_url = crawl_employer_sitemap(sitemap_url)
     
-     # Delete current data
+    # Delete current data
     delete_filter = {"created_date": today}
     mongodb.delete_many(delete_filter)
     
@@ -170,6 +170,11 @@ def employer_sitemap_to_postgres():
         employer_docs = mongodb.select(filter)
         
         postgresdb = connect_postgresdb()
+        # delete current data
+        condition_to_delete = {"created_date": today}
+        deleted_rows = postgresdb.delete(postgres_conn['vnw_employer_sitemap'], condition_to_delete)
+        print(f'Delete {deleted_rows} employer sitemap urls')
+        # load new data
         for doc in employer_docs:
             doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_employer_sitemap"], doc, "employer_id")
@@ -327,7 +332,7 @@ def current_employer_process():
     """ 
     mongodb = connect_mongodb()
     mongodb.set_collection(mongo_conn['cv_employer_detail'])    
-     # Delete current data
+    # Delete current data
     delete_filter = {
                     "$or": [
                         { "created_date": { "$eq": today } },

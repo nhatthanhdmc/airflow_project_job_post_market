@@ -24,7 +24,7 @@ headers = {
     "Accept-Encoding": "*",
     "Connection": "keep-alive"
 }
-mongodb = None
+mongodb = postgresdb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  

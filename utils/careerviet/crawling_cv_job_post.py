@@ -162,6 +162,11 @@ def load_job_post_sitemap_to_postgres():
         employer_docs = mongodb.select(filter)
         
         postgresdb = connect_postgresdb()
+        # delete current data
+        condition_to_delete = {"created_date": today}
+        deleted_rows = postgresdb.delete(postgres_conn['vnw_employer_sitemap'], condition_to_delete)
+        print(f'Delete {deleted_rows} employer sitemap urls')
+        # load new data
         for doc in employer_docs:
             doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")

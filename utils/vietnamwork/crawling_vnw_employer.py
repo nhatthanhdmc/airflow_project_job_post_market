@@ -23,7 +23,7 @@ headers = {
     "Accept-Encoding": "*",
     "Connection": "keep-alive"
 }
-mongodb = None
+mongodb = postgresdb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
@@ -48,6 +48,22 @@ def connect_mongodb():
     
     return mongodb
 
+def connect_postgresdb():   
+    """
+    Return a connection to postgresdb
+    Args: None
+    Returns: postgresdb
+    """      
+    postgresdb = PostgresDB(    dbname = postgres_conn['dbname'], 
+                                host = postgres_conn['host'], 
+                                port = postgres_conn['port'], 
+                                user = postgres_conn['username'], 
+                                password = postgres_conn['password']
+                    )
+    postgresdb.initialize_pool()
+    
+    return postgresdb   
+
 def crawl_employer_sitemap(sitemap_url):
     """
     Reads an XML URL containing URLs and saves them to a JSON file.
@@ -59,9 +75,8 @@ def crawl_employer_sitemap(sitemap_url):
         List
     """    
     list_url = []
-    # Hash the extracted string using SHA256 (you can use MD5 if preferred)
-    hash_object = hashlib.sha256(sitemap_url.encode())
-    employer_id = hash_object.hexdigest()
+    
+    
     try:
         response = requests.get(url = sitemap_url, 
                                 headers = headers)
@@ -81,6 +96,9 @@ def crawl_employer_sitemap(sitemap_url):
                 employer_url = url.find('ns:loc', namespaces).text.strip()
                 changefreq = url.find('ns:changefreq', namespaces)
                 lastmod = url.find('ns:lastmod', namespaces)
+                
+                # Use SHA-256 hash for uniqueness    
+                employer_id = hashlib.sha256(employer_url.encode()).hexdigest()
                 
                 list_url.append({
                     "employer_id": employer_id,
@@ -116,23 +134,29 @@ def employer_sitemap_process():
     # Close the connection    
     mongodb.close()
     
-def connect_postgresdb():   
-    """
-    Return a connection to postgresdb
-    Args: None
-    Returns: postgresdb
-    """      
-    postgresdb = PostgresDB(    dbname = postgres_conn['dbname'], 
-                                host = postgres_conn['host'], 
-                                port = postgres_conn['port'], 
-                                user = postgres_conn['username'], 
-                                password = postgres_conn['password']
-                    )
-    postgresdb.initialize_pool()
-    
-    return postgresdb
 def employer_sitemap_to_postgres():
-    return None
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['vnw_employer_sitemap'])
+        filter = {"created_date": today}
+        employer_docs = mongodb.select(filter)
+        
+        postgresdb = connect_postgresdb()        
+        # delete current data
+        condition_to_delete = {"created_date": today}
+        deleted_rows = postgresdb.delete(postgres_conn['vnw_employer_sitemap'], condition_to_delete)
+        print(f'Delete {deleted_rows} employer sitemap urls')
+        # load new data
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None) # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn['vnw_employer_sitemap'], doc, "employer_id")
+            print("Inserting employer_id: ", inserted_id)
+        
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}") 
+        
 def crawl_employer_template1(employer_url):
     """
     Crawl employer url with pattern: https://www.vietnamworks.com/company/
@@ -192,7 +216,7 @@ def crawl_employer_template2(employer_url):
     Args: 
         employer_url (string): employer url
     Returns:
-        employer (dict): containt all employer information
+        employer (dict): contain all employer information
     """
     employer = {}
     return employer
@@ -223,7 +247,7 @@ def crawl_employer_worker(employer_url):
             
             
             mongodb = connect_mongodb()    
-            mongodb.set_collection(conn['cv_employer_detail'])
+            mongodb.set_collection(mongo_conn['cv_employer_detail'])
             mongodb.insert_one(employer)
             # Close the connection    
             mongodb.close()            
@@ -255,7 +279,7 @@ def employer_url_generator():
     mongodb.close()
 
   
-def current_employer_process():
+def current_employer_detail_process():
     """
     Process the pipeline to crawl and store data of employer url into mongodb
     Args: 
@@ -283,9 +307,10 @@ def check_url_worker(url):
 if __name__ == "__main__":  
     # Process site map process
     employer_sitemap_process()
-    
+    employer_sitemap_to_postgres()
     # Current employer process
-    # current_employer_process()
+    # current_employer_detail_process()
+
     
 
     
