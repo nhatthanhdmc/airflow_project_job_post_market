@@ -196,6 +196,13 @@ def daily_employer_sitemap_to_postgres():
 ###########################################################################
 #### 4. Employer detail process: crawl + load to dwh
 ###########################################################################
+ 
+def check_url_worker(employer_url):
+    url_name = employer_url[len('https://careerviet.vn/vi/nha-tuyen-dung/'): len('https://careerviet.vn/vi/nha-tuyen-dung/') + 1]
+    # print(url_name)
+    if url_name in 'c':
+        return 1
+    return 2
     
 def crawl_employer_worker(employer_url):
     """
@@ -274,7 +281,7 @@ def crawl_employer_worker(employer_url):
            
 def employer_url_generator():    
     """
-    Crawl all jobs in sitemap data and store into mongodb
+    Crawl all jobs in sitemap data and store into mongodb - not use Airflow, use multiprocessing, yield
     Args: 
         mongodb
     Returns: employer url
@@ -323,7 +330,7 @@ def daily_employer_url_generator_airflow(worker):
  
 def current_employer_process():
     """
-    Process the pipeline to crawl and store data of employer url into mongodb
+    Process the pipeline to crawl and store data of employer url into mongodb - not use Airflow, use multiprocessing, yield
     Args: 
         mongodb: connection to mongodb
     Returns: 
@@ -345,13 +352,6 @@ def current_employer_process():
     with multiprocessing.Pool(2) as pool:
         # parallel the scapring process
         pool.map(crawl_employer_worker, employer_url_generator())
- 
-def check_url_worker(employer_url):
-    url_name = employer_url[len('https://careerviet.vn/vi/nha-tuyen-dung/'): len('https://careerviet.vn/vi/nha-tuyen-dung/') + 1]
-    # print(url_name)
-    if url_name in 'c':
-        return 1
-    return 2
         
 def daily_load_employer_detail_to_postgres():    
     """

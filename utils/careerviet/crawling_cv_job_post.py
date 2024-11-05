@@ -182,6 +182,29 @@ def daily_job_post_sitemap_to_postgres():
 ###########################################################################
 #### 4. Job post detail process: crawl + load to dwh
 ###########################################################################
+     
+def job_url_generator():    
+    """
+    Crawl all jobs in sitemap data and store into mongodb
+    Args: 
+        mongodb
+    Returns: job url
+    """  
+    mongodb = connect_mongodb()
+    mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
+    # Filter
+    filter = {"created_date": today}
+    # Projecttion: select only the "job_url" field
+    projection = {"_id": False, "job_url": True}
+    cursor = mongodb.select(filter, projection)
+    
+    # Extract job_url
+    for document in cursor:
+        print(document["job_url"])
+        yield document["job_url"]
+    
+    # Close the connection    
+    mongodb.close()
     
 def crawl_job_post_template1(soup, job_url):
     """
@@ -402,29 +425,6 @@ def crawl_job_post_worker(job_url):
                 # time.sleep(1) 
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")
-     
-def job_url_generator():    
-    """
-    Crawl all jobs in sitemap data and store into mongodb
-    Args: 
-        mongodb
-    Returns: job url
-    """  
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
-    # Filter
-    filter = {"created_date": today}
-    # Projecttion: select only the "job_url" field
-    projection = {"_id": False, "job_url": True}
-    cursor = mongodb.select(filter, projection)
-    
-    # Extract job_url
-    for document in cursor:
-        print(document["job_url"])
-        yield document["job_url"]
-    
-    # Close the connection    
-    mongodb.close()
 
 def daily_job_url_generator_airflow(worker):    
     """
