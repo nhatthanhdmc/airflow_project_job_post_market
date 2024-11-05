@@ -17,7 +17,9 @@ import re
 import time
 import multiprocessing
 import hashlib
-
+###########################################################################
+#### 1. Global variable
+###########################################################################
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Accept-Encoding": "*",
@@ -30,6 +32,10 @@ today = date.today().strftime("%Y-%m-%d")
 
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
+
+###########################################################################
+#### 2. Connection
+###########################################################################
 
 def connect_mongodb():   
     """
@@ -64,6 +70,10 @@ def connect_postgresdb():
     
     return postgresdb   
 
+###########################################################################
+#### 3. Sitemap process: crawl + load to dwh
+###########################################################################
+
 def crawl_employer_sitemap(sitemap_url):
     """
     Reads an XML URL containing URLs and saves them to a JSON file.
@@ -74,8 +84,7 @@ def crawl_employer_sitemap(sitemap_url):
     Return:
         List
     """    
-    list_url = []
-    
+    list_url = []    
     
     try:
         response = requests.get(url = sitemap_url, 
@@ -112,7 +121,7 @@ def crawl_employer_sitemap(sitemap_url):
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")         
     
-def employer_sitemap_process():
+def daily_employer_sitemap_process():
     """
     Process the pipeline to crawl and store data of sitemap url into mongodb
     Args: 
@@ -134,7 +143,7 @@ def employer_sitemap_process():
     # Close the connection    
     mongodb.close()
     
-def employer_sitemap_to_postgres():
+def daily_employer_sitemap_to_postgres():
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -157,6 +166,10 @@ def employer_sitemap_to_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}") 
         
+###########################################################################
+#### 4. Employer detail process: crawl + load to dwh
+###########################################################################
+
 def crawl_employer_template1(employer_url):
     """
     Crawl employer url with pattern: https://www.vietnamworks.com/company/
@@ -278,7 +291,6 @@ def employer_url_generator():
     # Close the connection    
     mongodb.close()
 
-  
 def current_employer_detail_process():
     """
     Process the pipeline to crawl and store data of employer url into mongodb
@@ -306,8 +318,8 @@ def check_url_worker(url):
        
 if __name__ == "__main__":  
     # Process site map process
-    employer_sitemap_process()
-    employer_sitemap_to_postgres()
+    daily_employer_sitemap_process()
+    daily_employer_sitemap_to_postgres()
     # Current employer process
     # current_employer_detail_process()
 

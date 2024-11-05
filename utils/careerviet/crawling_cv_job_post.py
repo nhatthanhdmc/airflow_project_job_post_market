@@ -492,7 +492,13 @@ def check_url_worker(job_url):
         return 1
     return 2
      
-def daily_load_job_post_detail_to_postgres():     
+def daily_load_job_post_detail_to_postgres():       
+    """
+    Process the pipeline to transfer job post detail from mongodb to postgres using Airflow
+    Args: 
+        mongodb: connection to mongodb
+    Returns: 
+    """   
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()

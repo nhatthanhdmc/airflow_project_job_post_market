@@ -161,7 +161,13 @@ def daily_employer_sitemap_process():
     # Close the connection    
     mongodb.close()
  
-def daily_employer_sitemap_to_postgres():     
+def daily_employer_sitemap_to_postgres():  
+    """
+    Process the pipeline to transfer employer sitemap from mongodb to postgres
+    Args: 
+        mongodb: connection to mongodb
+    Returns: 
+    """    
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
@@ -347,7 +353,13 @@ def check_url_worker(employer_url):
         return 1
     return 2
         
-def daily_load_employer_detail_to_postgres():     
+def daily_load_employer_detail_to_postgres():    
+    """
+    Process the pipeline to transfer employer detail from mongodb to postgres using Airflow
+    Args: 
+        mongodb: connection to mongodb
+    Returns: 
+    """  
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()

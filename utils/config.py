@@ -26,7 +26,7 @@ postgres ={
         "username"          :   "ETL",
         "password"          :   "thanh123",
         "host"              :   "localhost",      
-        "port"              :   "8000",
+        "port"              :   8000,
         "cv_job_post_sitemap"    :   "stg.cv_job_post_sitemap",
         "cv_job_post_detail"     :   "stg.cv_job_post_detail",
         "cv_employer_sitemap":"stg.cv_employer_sitemap",
