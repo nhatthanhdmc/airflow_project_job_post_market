@@ -74,6 +74,19 @@ def connect_postgresdb():
 #### 3. Sitemap process: crawl + load to dwh
 ###########################################################################
 
+def generate_employer_id(employer_url):
+    """
+    Hash the extracted string using SHA256 (you can use MD5 if preferred)
+    Args:
+        employer_url (str): The URL of employer.
+    Raises:     
+    Return:
+        employer id
+    """    
+    # 
+    hash_object = hashlib.sha256(employer_url.encode())
+    return hash_object.hexdigest()
+
 def crawl_employer_sitemap(sitemap_url):
     """
     Reads an XML URL containing URLs and saves them to a JSON file.
@@ -104,10 +117,8 @@ def crawl_employer_sitemap(sitemap_url):
             for url in root.findall('ns:url', namespaces):
                 employer_url = url.find('ns:loc', namespaces).text.strip()
                 changefreq = url.find('ns:changefreq', namespaces)
-                lastmod = url.find('ns:lastmod', namespaces)
-                
-                # Use SHA-256 hash for uniqueness    
-                employer_id = hashlib.sha256(employer_url.encode()).hexdigest()
+                lastmod = url.find('ns:lastmod', namespaces)                   
+                employer_id = generate_employer_id(employer_url)
                 
                 list_url.append({
                     "employer_id": employer_id,
@@ -182,9 +193,7 @@ def crawl_employer_template1(employer_url):
     employer = {}
     employer_id = employer_name = location = company_size = industry = website = about_us = None
     
-    # Hash the extracted string using SHA256 (you can use MD5 if preferred)
-    hash_object = hashlib.sha256(employer_url.encode())
-    employer_id = hash_object.hexdigest()
+    employer_id = generate_employer_id(employer_url)
     
     try:
         response = requests.get(url=employer_url,
@@ -200,9 +209,14 @@ def crawl_employer_template1(employer_url):
             soup = BeautifulSoup(response.content, parser) 
             basic_info = soup.find('div', class_='cp_basic_info_details')
             if basic_info:
-                employer_name = soup.find('h1', id='cp_company_name').text
-                if soup.find('span', class_='li-items-limit'):
-                    location = soup.find('span', class_='li-items-limit').text.strip
+                if soup.find('h1', id='cp_company_name'):
+                    employer_name = soup.find('h1', id='cp_company_name').text.strip()
+                if len(soup.find_all('span', class_='li-items-limit')) >= 1:
+                    location = soup.find_all('span', class_='li-items-limit')[0].text.strip()
+                if soup.find('a', class_='website-company'):
+                    employer_url = soup.find('a', class_='website-company').get('href')
+                if len(soup.find_all('span', class_='li-items-limit')) >= 2:
+                    industry = soup.find_all('span', class_='li-items-limit')[1].text.strip()
                 
             employer = {
                     "employer_id": employer_id,
@@ -255,13 +269,33 @@ def crawl_employer_worker(employer_url):
             # Crawl job
             soup = BeautifulSoup(response.content, parser) 
             company_info = soup.find('div', class_='company-info')
-            employer = {}  
+            employer = {} 
             
+            pattern_recruiter = r"https://www\.vietnamworks\.com/nha-tuyen-dung/"
+            pattern_company = r"https://www\.vietnamworks\.com/company/"
+
+            # Check templete of url
+            if re.match(pattern_company, employer_url):
+                employer = crawl_employer_template1(employer_url)
+            elif re.match(pattern_recruiter, employer_url):
+                employer = crawl_employer_template2(employer_url)
+            else:
+                print("Employer url is undefined" )          
+            print(employer)
             
-            
-            mongodb = connect_mongodb()    
-            mongodb.set_collection(mongo_conn['cv_employer_detail'])
-            mongodb.insert_one(employer)
+            mongodb = connect_mongodb() 
+            mongodb.set_collection(mongo_conn['vnw_employer_detail'])
+            # check employ_id exist or not
+            filter = {"employer_id": generate_employer_id(employer_url)}
+            if len(mongodb.select(filter)) > 0:
+                print("Update ", filter)
+                # Remove the 'created_date' key from the dictionary
+                if "created_date" in employer:
+                    del employer["created_date"]
+                mongodb.update_one(filter, employer)
+            else:
+                print("Insert ", filter)                    
+                mongodb.insert_one(employer)
             # Close the connection    
             mongodb.close()            
             # time.sleep(1) 
@@ -318,10 +352,11 @@ def check_url_worker(url):
        
 if __name__ == "__main__":  
     # Process site map process
-    daily_employer_sitemap_process()
-    daily_employer_sitemap_to_postgres()
-    # Current employer process
-    # current_employer_detail_process()
+    # daily_employer_sitemap_process()
+    # daily_employer_sitemap_to_postgres()
+    # process employer detail
+    url = "https://www.vietnamworks.com/company/misa"
+    crawl_employer_worker(url)
 
     
 
