@@ -209,14 +209,17 @@ def crawl_employer_template1(employer_url):
             soup = BeautifulSoup(response.content, parser) 
             basic_info = soup.find('div', class_='cp_basic_info_details')
             if basic_info:
-                if soup.find('h1', id='cp_company_name'):
+                if basic_info.find('h1', id='cp_company_name'):
                     employer_name = soup.find('h1', id='cp_company_name').text.strip()
-                if len(soup.find_all('span', class_='li-items-limit')) >= 1:
-                    location = soup.find_all('span', class_='li-items-limit')[0].text.strip()
-                if soup.find('a', class_='website-company'):
-                    employer_url = soup.find('a', class_='website-company').get('href')
-                if len(soup.find_all('span', class_='li-items-limit')) >= 2:
-                    industry = soup.find_all('span', class_='li-items-limit')[1].text.strip()
+                if len(basic_info.find_all('span', class_='li-items-limit')) >= 1:
+                    location = basic_info.find_all('span', class_='li-items-limit')[0].text.strip()
+                if basic_info.find('a', class_='website-company'):
+                    website = basic_info.find('a', class_='website-company').get('href')
+                if len(basic_info.find_all('span', class_='li-items-limit')) >= 2:
+                    industry = basic_info.find_all('span', class_='li-items-limit')[1].text.strip()
+             
+            if soup.find('div', class_='custom-story-item-content'):
+                about_us = soup.find('div', class_='custom-story-item-content').text.strip()   
                 
             employer = {
                     "employer_id": employer_id,
@@ -246,6 +249,56 @@ def crawl_employer_template2(employer_url):
         employer (dict): contain all employer information
     """
     employer = {}
+    employer_id = employer_name = location = company_size = industry = website = about_us = None
+    
+    employer_id = generate_employer_id(employer_url)
+    
+    try:
+        response = requests.get(url=employer_url,
+                                headers= headers)
+        parser = 'html.parser'
+        if response.status_code == 410:
+            print(f"Warning: XML resource might be unavailable (410 Gone).")
+            return  # Exit the function if it's a 410 error
+        elif response.status_code != 200:
+            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {employer_url}")
+        elif response.status_code == 200:
+            # craw an employer
+            soup = BeautifulSoup(response.content, parser) 
+            
+            if soup.find('div', id='bannerSection').find('h1'):
+                employer_name = soup.find('div', id='bannerSection').find('h1').text.strip()
+                    
+            basic_info = soup.find('div', id ='AboutUs')
+            print(basic_info.find_all('li'))
+            if basic_info.find_all('li'):   
+                print('xxx')             
+                if len(basic_info.find_all('li')) >= 1:
+                    company_size = basic_info.find_all('li')[0].find_all('p')[1].text.strip()
+                if len(basic_info.find_all('li')) >= 2:
+                    industry = basic_info.find_all('li')[1].find_all('p')[1].text.strip()
+                if len(basic_info.find_all('li')) >= 3:
+                    location = basic_info.find_all('li')[2].text.strip()
+                    
+            if basic_info.select('#vnwLayout__col > p'):
+                about_us = basic_info.select('#vnwLayout__col > p')[0].get_text() 
+                
+            employer = {
+                    "employer_id": employer_id,
+                    "employer_name": employer_name,
+                    "location" : location,
+                    "company_size" : company_size,
+                    "industry" : industry,
+                    "website" : website,
+                    "about_us" : about_us,                
+                    "employer_url": employer_url,
+                    "created_date": today,
+                    "updated_date": today,
+                    "worker": check_url_worker(employer_url)
+                }
+            
+    except requests.exceptions.RequestException as e:
+        print( f"Error occurred: {str(e)}")
     return employer
 
 def crawl_employer_worker(employer_url):
@@ -284,9 +337,11 @@ def crawl_employer_worker(employer_url):
             print(employer)
             
             mongodb = connect_mongodb() 
-            mongodb.set_collection(mongo_conn['vnw_employer_detail'])
+            mongodb.set_collection(mongo_conn['vnw_employer_detail'])    
+            
             # check employ_id exist or not
             filter = {"employer_id": generate_employer_id(employer_url)}
+            
             if len(mongodb.select(filter)) > 0:
                 print("Update ", filter)
                 # Remove the 'created_date' key from the dictionary
@@ -296,8 +351,9 @@ def crawl_employer_worker(employer_url):
             else:
                 print("Insert ", filter)                    
                 mongodb.insert_one(employer)
+                
             # Close the connection    
-            mongodb.close()            
+            mongodb.close()                      
             # time.sleep(1) 
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")
@@ -349,14 +405,47 @@ def check_url_worker(url):
     if 'https://www.vietnamworks.com/nha-tuyen-dung' in url:
         return 1
     return 2
+
+def daily_load_employer_detail_to_postgres():    
+    """
+    Process the pipeline to transfer employer detail from mongodb to postgres using Airflow
+    Args: 
+        mongodb: connection to mongodb
+    Returns: 
+    """  
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['vnw_employer_detail']) 
+        # load full
+        employer_docs = mongodb.select()
+        
+        postgresdb = connect_postgresdb()
+        # truncate 
+        postgresdb.truncate_table(postgres_conn["vnw_employer_detail"])
+        # load full
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["vnw_employer_detail"], doc, "employer_id")
+            print("Inserting employer_id: ", inserted_id)
        
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")
+               
 if __name__ == "__main__":  
     # Process site map process
     # daily_employer_sitemap_process()
     # daily_employer_sitemap_to_postgres()
     # process employer detail
     url = "https://www.vietnamworks.com/company/misa"
+    url = "https://www.vietnamworks.com/nha-tuyen-dung/aia-exchange-c383788"
     crawl_employer_worker(url)
+    daily_load_employer_detail_to_postgres()
 
     
 
