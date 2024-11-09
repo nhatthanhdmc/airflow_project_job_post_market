@@ -29,7 +29,6 @@ mongodb = postgresdb = None
 
 # Get current date in YYYY-MM-DD format
 today = date.today().strftime("%Y-%m-%d")  
-
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
 
@@ -71,8 +70,12 @@ def connect_postgresdb():
     return postgresdb   
 
 ###########################################################################
-#### 3. Sitemap process: crawl + load to dwh
+#### 3. Sitemap process: crawl => mongodb => postgres
 ###########################################################################
+def check_url_worker(url):    
+    if 'www.vietnamworks.com/nha-tuyen-dung' in url:
+        return 1
+    return 2
 
 def generate_employer_id(employer_url):
     """
@@ -125,7 +128,8 @@ def crawl_employer_sitemap(sitemap_url):
                     'employer_url': employer_url,
                     'changefreq': changefreq.text.strip() if changefreq is not None else None,
                     'lastmod': lastmod.text.strip() if lastmod is not None else None,
-                    "created_date": today
+                    "created_date": today,
+                    "worker": check_url_worker(employer_url)
                 })
             
         return list_url    
@@ -178,7 +182,7 @@ def daily_employer_sitemap_to_postgres():
         print(f"Error transferring data: {e}") 
         
 ###########################################################################
-#### 4. Employer detail process: crawl + load to dwh
+#### 4. Employer detail process: crawl => mongodb => postgres
 ###########################################################################
 
 def crawl_employer_template1(employer_url):
@@ -381,6 +385,32 @@ def employer_url_generator():
     # Close the connection    
     mongodb.close()
 
+def daily_employer_url_generator_airflow(worker):    
+    """
+    Crawl all jobs in sitemap data and store into mongodb using Airflow
+    Args: 
+        worker
+    Returns: employer url
+    """  
+    mongodb = connect_mongodb()
+    mongodb.set_collection(mongo_conn['vnw_employer_sitemap'])
+    # Filter
+    filter = {"lastmod": today, "worker": worker}
+    # Projecttion: select only the "job_url" field
+    projection = {"_id": False, "employer_url": True}
+    cursor = mongodb.select(filter, projection)
+    count = 0
+    # Extract job_url
+    for document in cursor: 
+        print(document["employer_url"])
+        crawl_employer_worker(document["employer_url"])  
+        count += 1
+        if  count > 6:
+            break
+        # break
+    # Close the connection    
+    mongodb.close()
+    
 def current_employer_detail_process():
     """
     Process the pipeline to crawl and store data of employer url into mongodb
@@ -400,11 +430,6 @@ def current_employer_detail_process():
     with multiprocessing.Pool(2) as pool:
         # parallel the scapring process
         pool.map(crawl_employer_worker, employer_url_generator())
- 
-def check_url_worker(url):    
-    if 'https://www.vietnamworks.com/nha-tuyen-dung' in url:
-        return 1
-    return 2
 
 def daily_load_employer_detail_to_postgres():    
     """

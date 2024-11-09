@@ -76,8 +76,14 @@ def connect_postgresdb():
     return postgresdb
 
 ###########################################################################
-#### 3. Sitemap process: crawl + load to dwh
+#### 3. Sitemap process: crawl => mongodb => postgres
 ###########################################################################
+def check_url_worker(job_url):
+    url_name = job_url[len('https://careerviet.vn/vi/tim-viec-lam/') : len('https://careerviet.vn/vi/tim-viec-lam/') +1]
+    # print(url_name)
+    if url_name in 'abcdefghigkl':
+        return 1
+    return 2
 
 def crawl_job_post_sitemap(sitemap_url):
     """
@@ -164,9 +170,9 @@ def daily_job_post_sitemap_to_postgres():
         postgresdb = connect_postgresdb()
         # delete current data
         condition_to_delete = {"created_date": today}
-        deleted_rows = postgresdb.delete(postgres_conn['vnw_employer_sitemap'], condition_to_delete)
-        print(f'Delete {deleted_rows} employer sitemap urls')
-        # load new data
+        deleted_rows = postgresdb.delete(postgres_conn['cv_job_post_sitemap'], condition_to_delete)
+        print(f'Delete {deleted_rows} job post sitemap urls')
+        # load current data
         for doc in employer_docs:
             doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")
@@ -180,7 +186,7 @@ def daily_job_post_sitemap_to_postgres():
         print(f"Error transferring data: {e}")     
  
 ###########################################################################
-#### 4. Job post detail process: crawl + load to dwh
+#### 4. Job post detail process:crawl => mongodb => postgres
 ###########################################################################
      
 def job_url_generator():    
@@ -484,14 +490,7 @@ def delete_duplicate_job_post_detail():
     condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
     mongodb.delete_duplicates_with_condition(key_fields, condition)
     mongodb.close()
- 
-def check_url_worker(job_url):
-    url_name = job_url[len('https://careerviet.vn/vi/tim-viec-lam/') : len('https://careerviet.vn/vi/tim-viec-lam/') +1]
-    # print(url_name)
-    if url_name in 'abcdefghigkl':
-        return 1
-    return 2
-     
+      
 def daily_load_job_post_detail_to_postgres():       
     """
     Process the pipeline to transfer job post detail from mongodb to postgres using Airflow

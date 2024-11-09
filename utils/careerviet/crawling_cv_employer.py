@@ -69,7 +69,7 @@ def connect_postgresdb():
     return postgresdb      
 
 ###########################################################################
-#### 3. Sitemap process: crawl + load to dwh
+#### 3. Sitemap process: crawl => mongodb => postgres
 ###########################################################################
 
 def crawl_employer_sitemap(url):
@@ -194,7 +194,7 @@ def daily_employer_sitemap_to_postgres():
         print(f"Error transferring data: {e}")
     
 ###########################################################################
-#### 4. Employer detail process: crawl + load to dwh
+#### 4. Employer detail process: crawl => mongodb => postgres
 ###########################################################################
  
 def check_url_worker(employer_url):

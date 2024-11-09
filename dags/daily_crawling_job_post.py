@@ -24,38 +24,71 @@ import utils.smtp as smtp
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'utils')))
 import utils.careerviet.crawling_cv_job_post as cv_jp
 import utils.careerviet.crawling_cv_employer as cv_emp   
+import utils.vietnamwork.crawling_vnw_employer as vnw_emp
+import utils.vietnamwork.crawling_vnw_job_post as vnw_jp
 
 
 # [END import_module]
 # Python script
 
-# CV
-# job post => mongodb
-def daily_cv_job_post_sitemap():
-    cv_jp.daily_job_post_sitemap_process()
-    
-def daily_cv_job_post_detail(worker):
-    cv_jp.daily_job_url_generator_airflow(worker)
-# employer => mongodb  
+############ CV ############
+# employer: crawl => mongodb  
 def daily_cv_employer_sitemap():
     cv_emp.daily_employer_sitemap_process()
     
 def daily_cv_employer_detail(worker):
     cv_emp.daily_employer_url_generator_airflow(worker)
-# employer => postgres    
+# employer: mongodb => postgres    
 def daily_cv_employer_sitemap_to_postgres():
     cv_emp.daily_employer_sitemap_to_postgres()     
     
 def daily_cv_employer_detail_to_postgres():
-    cv_emp.daily_load_employer_detail_to_postgres()     
-# jp => postgres  
+    cv_emp.daily_load_employer_detail_to_postgres()  
+
+# job post: crawl => mongodb
+def daily_cv_job_post_sitemap():
+    cv_jp.daily_job_post_sitemap_process()
+    
+def daily_cv_job_post_detail(worker):
+    cv_jp.daily_job_url_generator_airflow(worker)   
+    
+# job post: mongodb => postgres  
 def daily_cv_jp_sitemap_to_postgres():
     cv_jp.daily_job_post_sitemap_to_postgres()     
     
 def daily_cv_jp_detail_to_postgres():
     cv_jp.daily_load_job_post_detail_to_postgres()     
 
-#      
+############ VNW ############
+# employer: crawl => mongodb    
+def daily_vnw_employer_sitemap():
+    vnw_emp.daily_employer_sitemap_process()
+    
+def daily_vnw_employer_detail(worker):
+    vnw_emp.daily_employer_url_generator_airflow(worker)
+    
+# employer: mongodb => postgres    
+def daily_vnw_employer_sitemap_to_postgres():
+    vnw_emp.daily_employer_sitemap_to_postgres()     
+    
+def daily_vnw_employer_detail_to_postgres():
+    vnw_emp.daily_load_employer_detail_to_postgres()   
+    
+# job post: crawl => mongodb
+def daily_vnw_job_post_sitemap():
+    vnw_jp.daily_job_post_sitemap_process()
+    
+# def daily_vnw_job_post_detail(worker):
+#     vnw_jp.daily_job_url_generator_airflow(worker)   
+    
+# job post: mongodb => postgres  
+def daily_vnw_jp_sitemap_to_postgres():
+    vnw_jp.daily_job_post_sitemap_to_postgres()     
+    
+# def daily_vnw_jp_detail_to_postgres():
+#     vnw_jp.daily_load_job_post_detail_to_postgres()  
+      
+############ CALL BACK ############      
 def on_success_callback(context):
     """
     # Callback function to send Slack notification and email when task/DAG succeeds
@@ -93,70 +126,127 @@ with DAG(
     },
     # [END default_args]
     description="A DAG for crawling job post data and loading into DWH",
-    schedule=timedelta(days=1),
+    schedule_interval=None,
     start_date=datetime(2021, 1, 1),
     catchup=False,
     tags=["python"],
 ) as dag:
     # [END instantiate_dag]
     # [START basic_task]
-    # CV
-    t_daily_cv_jp_sitemap = PythonOperator(
-        task_id="daily_cv_job_post_sitemap",
-        python_callable=daily_cv_job_post_sitemap
+    ######### CV #########
+    # t_daily_cv_employer_sitemap = PythonOperator(
+    #     task_id="daily_cv_employer_sitemap",
+    #     python_callable=daily_cv_employer_sitemap
+    # )
+    
+    # t_daily_cv_employer_sitemap_to_postgres = PythonOperator(
+    #     task_id="daily_cv_employer_sitemap_to_postgres",
+    #     python_callable=daily_cv_employer_sitemap_to_postgres
+    # )
+             
+    # t_daily_cv_employer_detail_to_postgres = PythonOperator(
+    #     task_id="daily_cv_employer_detail_to_postgres",
+    #     python_callable=daily_cv_employer_detail_to_postgres
+    # )    
+    
+    # t_daily_cv_jp_sitemap = PythonOperator(
+    #     task_id="daily_cv_job_post_sitemap",
+    #     python_callable=daily_cv_job_post_sitemap
+    # )
+        
+    # t_daily_cv_jp_sitemap_to_postgres = PythonOperator(
+    #     task_id="daily_cv_jp_sitemap_to_postgres",
+    #     python_callable=daily_cv_jp_sitemap_to_postgres
+    # )
+             
+    # t_daily_cv_jp_detail_to_postgres = PythonOperator(
+    #     task_id="daily_cv_jp_detail_to_postgres",
+    #     python_callable=daily_cv_jp_detail_to_postgres
+    # )    
+    ######### VNW #########     
+    # t_daily_vnw_employer_sitemap = PythonOperator(
+    #     task_id="daily_vnw_employer_sitemap",
+    #     python_callable=daily_vnw_employer_sitemap
+    # )
+    
+    # t_daily_vnw_employer_sitemap_to_postgres = PythonOperator(
+    #     task_id="daily_vnw_employer_sitemap_to_postgres",
+    #     python_callable=daily_vnw_employer_sitemap_to_postgres
+    # )
+             
+    # t_daily_vnw_employer_detail_to_postgres = PythonOperator(
+    #     task_id="daily_vnw_employer_detail_to_postgres",
+    #     python_callable=daily_vnw_employer_detail_to_postgres
+    # )    
+    
+    t_daily_vnw_jp_sitemap = PythonOperator(
+        task_id="daily_vnw_job_post_sitemap",
+        python_callable=daily_vnw_job_post_sitemap
     )
         
-    t_daily_cv_employer_sitemap = PythonOperator(
-        task_id="daily_cv_employer_sitemap",
-        python_callable=daily_cv_employer_sitemap
+    t_daily_vnw_jp_sitemap_to_postgres = PythonOperator(
+        task_id="daily_vnw_jp_sitemap_to_postgres",
+        python_callable=daily_vnw_jp_sitemap_to_postgres
     )
-    
-    t_daily_cv_employer_sitemap_to_postgres = PythonOperator(
-        task_id="daily_cv_employer_sitemap_to_postgres",
-        python_callable=daily_cv_employer_sitemap_to_postgres
-    )
-             
-    t_daily_cv_employer_detail_to_postgres = PythonOperator(
-        task_id="daily_cv_employer_detail_to_postgres",
-        python_callable=daily_cv_employer_detail_to_postgres
-    )    
-    
-    t_daily_cv_jp_sitemap_to_postgres = PythonOperator(
-        task_id="daily_cv_jp_sitemap_to_postgres",
-        python_callable=daily_cv_jp_sitemap_to_postgres
-    )
-             
-    t_daily_cv_jp_detail_to_postgres = PythonOperator(
-        task_id="daily_cv_jp_detail_to_postgres",
-        python_callable=daily_cv_jp_detail_to_postgres
-    )
+        
     # [END jinja_template]
-
-    # Create the call_employer_detail tasks for each worker
-    for worker in [1,2]:
-        call_employer_detail = PythonOperator(
-            task_id= f"daily_cv_employer_detail_{worker}",
-            python_callable=daily_cv_employer_detail,
-            op_kwargs={'worker': worker}
-        )
-         # Set the task dependencies
-        t_daily_cv_employer_sitemap >> call_employer_detail >> t_daily_cv_employer_detail_to_postgres
-
-    # Ensure t_daily_cv_employer_sitemap_to_postgres runs in parallel with call_employer_detail tasks
-    t_daily_cv_employer_sitemap >> t_daily_cv_employer_sitemap_to_postgres
-
-    # Create the call_employer_detail tasks for each worker
-    for worker in [1, 2]:
-        call_jp_detail = PythonOperator(
-            task_id=f"daily_cv_job_post_detail_{worker}",
-            python_callable=daily_cv_job_post_detail,
-            op_kwargs={'worker': worker}
-        )
-         # Set the task dependencies
-        t_daily_cv_jp_sitemap >> call_jp_detail >> t_daily_cv_jp_detail_to_postgres
-        
-    # Ensure t_daily_cv_jp_sitemap_to_postgres runs in parallel with call_employer_detail tasks
-    t_daily_cv_jp_sitemap >> t_daily_cv_jp_sitemap_to_postgres
     
+    #######################################################
+    ######################## 1. CV ########################
+    #######################################################
+    # # Create the call_cv_employer_detail tasks for each worker
+    # for worker in [1,2]:
+    #     call_cv_employer_detail = PythonOperator(
+    #         task_id= f"daily_cv_employer_detail_{worker}",
+    #         python_callable=daily_cv_employer_detail,
+    #         op_kwargs={'worker': worker}
+    #     )
+    #      # Set the task dependencies
+    #     t_daily_cv_employer_sitemap >> call_cv_employer_detail >> t_daily_cv_employer_detail_to_postgres
+
+    # # t_daily_cv_employer_sitemap_to_postgres runs in parallel with call_cv_employer_detail tasks
+    # t_daily_cv_employer_sitemap >> t_daily_cv_employer_sitemap_to_postgres
+
+    # # Create the call_cv_jp_detail tasks for each worker
+    # for worker in [1, 2]:
+    #     call_cv_jp_detail = PythonOperator(
+    #         task_id=f"daily_cv_job_post_detail_{worker}",
+    #         python_callable=daily_cv_job_post_detail,
+    #         op_kwargs={'worker': worker}
+    #     )
+    #      # Set the task dependencies
+    #     t_daily_cv_jp_sitemap >> call_cv_jp_detail >> t_daily_cv_jp_detail_to_postgres
+        
+    # # Ensure t_daily_cv_jp_sitemap_to_postgres runs in parallel with call_cv_jp_detail tasks
+    # t_daily_cv_jp_sitemap >> t_daily_cv_jp_sitemap_to_postgres
+    
+    #######################################################
+    ####################### 2. VNW ########################
+    #######################################################
+    # Create the call_vnw_employer_detail tasks for each worker
+    # for worker in [1,2]:
+    #     call_vnw_employer_detail = PythonOperator(
+    #         task_id= f"daily_vnw_employer_detail_{worker}",
+    #         python_callable=daily_vnw_employer_detail,
+    #         op_kwargs={'worker': worker}
+    #     )
+    #      # Set the task dependencies
+    #     t_daily_vnw_employer_sitemap >> call_vnw_employer_detail >> t_daily_vnw_employer_detail_to_postgres
+
+    # # Ensure t_daily_vnw_employer_sitemap_to_postgres runs in parallel with call_vnw_employer_detail tasks
+    # t_daily_vnw_employer_sitemap >> t_daily_vnw_employer_sitemap_to_postgres
+    
+    # Create the call_vnw_jp_detail tasks for each worker
+    # for worker in [1, 2]:
+    #     call_vnw_jp_detail = PythonOperator(
+    #         task_id=f"daily_vnw_job_post_detail_{worker}",
+    #         python_callable=daily_vnw_job_post_detail,
+    #         op_kwargs={'worker': worker}
+    #     )
+         # Set the task dependencies
+        # t_daily_vnw_jp_sitemap >> call_vnw_jp_detail >> t_daily_vnw_jp_detail_to_postgres
+        
+    # # Ensure t_daily_cv_jp_sitemap_to_postgres runs in parallel with call_cv_jp_detail tasks
+    t_daily_vnw_jp_sitemap >> t_daily_vnw_jp_sitemap_to_postgres
 # [END tutorial]
 #noti
