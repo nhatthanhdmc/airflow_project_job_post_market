@@ -223,7 +223,7 @@ def crawl_job_post_template1(soup, job_url):
     job = {}
     job_id = job_title = company_url  = updated_date = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
-    job_description = job_requirement = more_information = None
+    job_description = job_requirement = more_information = updated_date_on_web = None
     
     pattern = r'\.([A-Z0-9]+)\.html'
     match = re.search(pattern, job_url)

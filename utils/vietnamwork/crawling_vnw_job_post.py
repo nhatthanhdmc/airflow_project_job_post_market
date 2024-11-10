@@ -185,7 +185,155 @@ def daily_job_post_sitemap_to_postgres():
 ###########################################################################
 #### 4. Job post detail process:crawl => mongodb => postgres
 ###########################################################################
+def crawl_job_post_template(soup, job_url):
+    """
+    Crawl a job with template 1
+    Args: 
+        job_url (string): job url
+    Returns: job (json)
+    """ 
+    # Attribute
+    job = {}
+    job_id = job_title = company_url  = updated_date = industry =  \
+    job_type = salary = experience = job_level = deadline = benefit = \
+    job_description = job_requirement = more_information = updated_date_on_web = None
+    
+    pattern = r'\.([A-Z0-9]+)\.html'
+    match = re.search(pattern, job_url)
+    if match:
+        job_id = match.group(1)    
+        
+    # PART 1: TOP 
+    
+    # PART 2: BODY
+    
+    # PART 1: BOTTOM
+    
+    job = {
+        "job_id":job_id,
+        "job_url": job_url,
+        "job_title": job_title,
+        "company_url": company_url,
+        "updated_date_on_web": updated_date_on_web,
+        "industry": industry,
+        "job_type": job_type,
+        "salary": salary,
+        "experience": experience,
+        "job_level": job_level,
+        "deadline": deadline,
+        "benefit": benefit,
+        "job_description": job_description,
+        "job_requirement": job_requirement,
+        "more_information": more_information,
+        "created_date": today,
+        "updated_date": today,
+        "worker" : check_url_worker(job_url)
+    }   
+    return job
 
+def crawl_job_post_worker(job_url):
+    """
+    Crawl a job
+    Args: 
+        url (string): job url
+    Returns: 
+    """ 
+    time.sleep(1) 
+    try:
+        response = requests.get(    url = job_url, 
+                                    headers=headers)
+        parser = 'html.parser'
+        if response.status_code == 410:
+            print(f"Warning: XML resource might be unavailable (410 Gone).")
+            return  # Exit the function if it's a 410 error
+        elif response.status_code != 200:
+            
+            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {job_url}")
+        elif response.status_code == 200:
+            # Crawl job
+            soup = BeautifulSoup(response.content, parser) 
+            job = {}  
+            job = crawl_job_post_template(soup, job_url)
+            
+            mongodb = connect_mongodb()    
+            mongodb.set_collection(mongo_conn['vnw_job_post_detail'])
+            
+            if job:
+                filter = {"job_id": job["job_id"]}
+                
+                if len(mongodb.select(filter)) > 0:
+                    print("Update ", filter)
+                    # Remove the 'created_date' key from the dictionary
+                    if "created_date" in job:
+                        del job["created_date"]
+                    mongodb.update_one(filter, job)
+                else:
+                    print("Insert ", filter)
+                    mongodb.insert_one(job)
+                
+                # Close the connection    
+                mongodb.close()            
+                # time.sleep(1) 
+    except requests.exceptions.RequestException as e:
+        print( f"Error occurred: {str(e)}")
+ 
+def daily_job_url_generator_airflow(worker):    
+    """
+    Crawl all jobs in sitemap data and store into mongodb using Airflow
+    Args: 
+        worker
+    Returns: job url
+    """  
+    mongodb = connect_mongodb()
+    mongodb.set_collection(mongo_conn['vnw_job_post_sitemap'])
+    # Filter
+    filter = {"created_date": today, "worker": worker}
+    # Projecttion: select only the "job_url" field
+    projection = {"_id": False, "job_url": True}
+    cursor = mongodb.select(filter, projection)
+    count = 0
+    # Extract job_url
+    for document in cursor:
+        print(document["job_url"])
+        crawl_job_post_worker(document["job_url"]) 
+        count += 1
+        if  count > 4:
+            break
+        #     break   
+    # Close the connection    
+    mongodb.close()      
+ 
+def daily_load_job_post_detail_to_postgres():       
+    """
+    Process the pipeline to transfer job post detail from mongodb to postgres using Airflow
+    Args: 
+        mongodb: connection to mongodb
+    Returns: 
+    """   
+    mongodb = postgresdb = None
+    try:
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['vnw_job_post_detail']) 
+        # load full
+        employer_docs = mongodb.select()
+        
+        postgresdb = connect_postgresdb()
+        # truncate
+        postgresdb.truncate_table(postgres_conn["vnw_job_post_detail"])
+        # load full
+        for doc in employer_docs:
+            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            inserted_id = postgresdb.insert(postgres_conn["vnw_job_post_detail"], doc, "job_id")
+            print("Inserting job_id: ", inserted_id)
+       
+        # close connection
+        mongodb.close()
+        postgresdb.close_pool()
+        print("Data transferred successfully")
+    except Exception as e:
+        print(f"Error transferring data: {e}")   
+        
+          
 if __name__ == "__main__":  
     # Process sitemap
     daily_job_post_sitemap_process()
