@@ -194,17 +194,29 @@ def crawl_job_post_template(soup, job_url):
     """ 
     # Attribute
     job = {}
-    job_id = job_title = company_url  = updated_date = industry =  \
+    job_id = job_title = location = company_url  = updated_date = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
-    job_description = job_requirement = more_information = updated_date_on_web = None
+    job_description = job_requirement = more_information = \
+    updated_date_on_web = total_views = None
     
-    pattern = r'\.([A-Z0-9]+)\.html'
+    pattern = r'-(\d+)-jv$'
     match = re.search(pattern, job_url)
     if match:
         job_id = match.group(1)    
         
     # PART 1: TOP 
+    if soup.find('h1', attrs = { 'name':'title'}):
+        job_title = soup.find('h1', attrs = { 'name':'title'}).text.strip()
+    salary = soup.select('#vnwLayout__col > span')
     
+    if soup.select('#vnwLayout__col > span'):
+        salary = soup.select('#vnwLayout__col > span')[0].text.strip()
+    
+    if len(soup.select('#vnwLayout__col > div > span')) >= 2:
+        total_views = soup.select('#vnwLayout__col > div > span')[1].text.strip()
+    
+    if len(soup.select('#vnwLayout__col > div > span')) >= 3:
+        location = soup.select('#vnwLayout__col > div > span')[2].text.strip()
     # PART 2: BODY
     
     # PART 1: BOTTOM
@@ -213,6 +225,7 @@ def crawl_job_post_template(soup, job_url):
         "job_id":job_id,
         "job_url": job_url,
         "job_title": job_title,
+        "location": location,
         "company_url": company_url,
         "updated_date_on_web": updated_date_on_web,
         "industry": industry,
@@ -227,8 +240,10 @@ def crawl_job_post_template(soup, job_url):
         "more_information": more_information,
         "created_date": today,
         "updated_date": today,
+        "total_views": total_views,
         "worker" : check_url_worker(job_url)
     }   
+    print(job)
     return job
 
 def crawl_job_post_worker(job_url):
@@ -336,5 +351,4 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    daily_job_post_sitemap_process()
-    print('main')
+    crawl_job_post_worker("https://www.vietnamworks.com/guest-relations-officer-1831989-jv")
