@@ -224,8 +224,12 @@ def crawl_job_post_template(soup, job_url):
     if soup.find_all('div', attrs={'data-benefit-name': True}):
         benefit = '\n '.join([div.text.strip() for div in soup.find_all('div', attrs={'data-benefit-name': True})])
     
-    if soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju > p(1)'):
-        posted_date = datetime.strptime(soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju > p(1)').text.strip(), "%d/%m/%Y")
+    div_elements = soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju')
+    
+    specific_div = next((div for div in div_elements if "NGÀY ĐĂNG" in div.text), None)
+    if specific_div:
+        posted_date = datetime.strptime(specific_div.find('p').text.strip(), r"%d/%m/%Y")
+    
     # PART 1: BOTTOM
     
     job = {
