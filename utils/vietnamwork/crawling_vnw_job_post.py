@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from utils.mongodb_connection import MongoDB
 from utils.postgres_connection import PostgresDB
 from utils import config as cfg
-from datetime import date
+from datetime import date, datetime
 import re
 import time
 import multiprocessing
@@ -197,7 +197,7 @@ def crawl_job_post_template(soup, job_url):
     job_id = job_title = location = company_url  = updated_date = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
     job_description = job_requirement = more_information = \
-    updated_date_on_web = total_views = None
+    updated_date_on_web = total_views = posted_date = None
     
     pattern = r'-(\d+)-jv$'
     match = re.search(pattern, job_url)
@@ -218,7 +218,14 @@ def crawl_job_post_template(soup, job_url):
     if len(soup.select('#vnwLayout__col > div > span')) >= 3:
         location = soup.select('#vnwLayout__col > div > span')[2].text.strip()
     # PART 2: BODY
+    if soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p'):
+       job_description = ''.join(p.text.strip() for p in soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')) 
     
+    if soup.find_all('div', attrs={'data-benefit-name': True}):
+        benefit = '\n '.join([div.text.strip() for div in soup.find_all('div', attrs={'data-benefit-name': True})])
+    
+    if soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju > p(1)'):
+        posted_date = datetime.strptime(soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju > p(1)').text.strip(), "%d/%m/%Y")
     # PART 1: BOTTOM
     
     job = {
@@ -241,6 +248,7 @@ def crawl_job_post_template(soup, job_url):
         "created_date": today,
         "updated_date": today,
         "total_views": total_views,
+        "posted_date": posted_date,
         "worker" : check_url_worker(job_url)
     }   
     print(job)
