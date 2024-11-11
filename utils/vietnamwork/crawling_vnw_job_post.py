@@ -197,7 +197,7 @@ def crawl_job_post_template(soup, job_url):
     job_id = job_title = location = company_url  = updated_date = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
     job_description = job_requirement = more_information = \
-    updated_date_on_web = total_views = posted_date = None
+    updated_date_on_web = total_views = posted_date = field = None
     
     pattern = r'-(\d+)-jv$'
     match = re.search(pattern, job_url)
@@ -213,7 +213,7 @@ def crawl_job_post_template(soup, job_url):
         salary = soup.select('#vnwLayout__col > span')[0].text.strip()
     
     if len(soup.select('#vnwLayout__col > div > span')) >= 2:
-        total_views = soup.select('#vnwLayout__col > div > span')[1].text.strip()
+        total_views = re.findall(r'\d+',soup.select('#vnwLayout__col > div > span')[1].text.strip())[0]
     
     if len(soup.select('#vnwLayout__col > div > span')) >= 3:
         location = soup.select('#vnwLayout__col > div > span')[2].text.strip()
@@ -230,6 +230,25 @@ def crawl_job_post_template(soup, job_url):
     if specific_div:
         posted_date = datetime.strptime(specific_div.find('p').text.strip(), r"%d/%m/%Y")
     
+    specific_div = next((div for div in div_elements if "CẤP BẬC" in div.text), None)
+    if specific_div:
+        job_level = specific_div.find('p').text.strip()
+        
+    specific_div = next((div for div in div_elements if "NGÀNH NGHỀ" in div.text), None)
+    if specific_div:
+        field = specific_div.find('p').text.strip()
+    
+    specific_div = next((div for div in div_elements if "KỸ NĂNG" in div.text), None)
+    if specific_div:
+        job_requirement = specific_div.find('p').text.strip()
+        
+    specific_div = next((div for div in div_elements if "LĨNH VỰC" in div.text), None)
+    if specific_div:
+        industry = specific_div.find('p').text.strip()   
+        
+    specific_div = next((div for div in div_elements if "SỐ NĂM KINH NGHIỆM TỐI THIỂU" in div.text), None)
+    if specific_div:
+        experience = specific_div.find('p').text.strip()
     # PART 1: BOTTOM
     
     job = {
@@ -240,6 +259,7 @@ def crawl_job_post_template(soup, job_url):
         "company_url": company_url,
         "updated_date_on_web": updated_date_on_web,
         "industry": industry,
+        "field":field,
         "job_type": job_type,
         "salary": salary,
         "experience": experience,
@@ -364,3 +384,4 @@ def daily_load_job_post_detail_to_postgres():
 if __name__ == "__main__":  
     # Process sitemap
     crawl_job_post_worker("https://www.vietnamworks.com/guest-relations-officer-1831989-jv")
+    daily_load_job_post_detail_to_postgres()
