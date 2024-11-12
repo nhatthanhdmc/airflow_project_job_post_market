@@ -87,7 +87,36 @@ def daily_vnw_jp_sitemap_to_postgres():
     
 def daily_vnw_jp_detail_to_postgres():
     vnw_jp.daily_load_job_post_detail_to_postgres()  
-      
+ 
+############ VL24H ############
+# employer: crawl => mongodb    
+def daily_vl24h_employer_sitemap():
+    vl24h_emp.daily_employer_sitemap_process()
+    
+def daily_vl24h_employer_detail(worker):
+    vl24h_emp.daily_employer_url_generator_airflow(worker)
+    
+# employer: mongodb => postgres    
+def daily_vl24h_employer_sitemap_to_postgres():
+    vl24h_emp.daily_employer_sitemap_to_postgres()     
+    
+def daily_vl24h_employer_detail_to_postgres():
+    vl24h_emp.daily_load_employer_detail_to_postgres()   
+    
+# job post: crawl => mongodb
+def daily_vl24h_job_post_sitemap():
+    vl24h_jp.daily_job_post_sitemap_process()
+    
+def daily_vl24h_job_post_detail(worker):
+    vl24h_jp.daily_job_url_generator_airflow(worker)   
+    
+# job post: mongodb => postgres  
+def daily_vl24h_jp_sitemap_to_postgres():
+    vl24h_jp.daily_job_post_sitemap_to_postgres()     
+    
+def daily_vl24h_jp_detail_to_postgres():
+    vl24h_jp.daily_load_job_post_detail_to_postgres()  
+         
 ############ CALL BACK ############      
 def on_success_callback(context):
     """
@@ -193,6 +222,36 @@ with DAG(
         task_id="daily_vnw_jp_detail_to_postgres",
         python_callable=daily_vnw_jp_detail_to_postgres
     )      
+    ######### VL24H #########
+    t_daily_vl24h_employer_sitemap = PythonOperator(
+        task_id="daily_vl24h_employer_sitemap",
+        python_callable=daily_vl24h_employer_sitemap
+    )
+    
+    t_daily_vl24h_employer_sitemap_to_postgres = PythonOperator(
+        task_id="daily_vl24h_employer_sitemap_to_postgres",
+        python_callable=daily_vl24h_employer_sitemap_to_postgres
+    )
+             
+    t_daily_vl24h_employer_detail_to_postgres = PythonOperator(
+        task_id="daily_vl24h_employer_detail_to_postgres",
+        python_callable=daily_vl24h_employer_detail_to_postgres
+    )    
+    
+    t_daily_vl24h_jp_sitemap = PythonOperator(
+        task_id="daily_vl24h_job_post_sitemap",
+        python_callable=daily_vl24h_job_post_sitemap
+    )
+        
+    t_daily_vl24h_jp_sitemap_to_postgres = PythonOperator(
+        task_id="daily_vl24h_jp_sitemap_to_postgres",
+        python_callable=daily_vl24h_jp_sitemap_to_postgres
+    )
+    
+    t_daily_vl24h_jp_detail_to_postgres = PythonOperator(
+        task_id="daily_vl24h_jp_detail_to_postgres",
+        python_callable=daily_vl24h_jp_detail_to_postgres
+    )
     # [END jinja_template]
     
     #######################################################
@@ -253,5 +312,34 @@ with DAG(
     # Ensure t_daily_vnw_jp_sitemap_to_postgres runs in parallel with call_vnw_jp_detail tasks
     t_daily_vnw_jp_sitemap >> t_daily_vnw_jp_sitemap_to_postgres
         
+    #######################################################
+    ####################### 3. VL24H ######################
+    #######################################################
+    # Create the call_vl24h_employer_detail tasks for each worker
+    for worker in [1,2]:
+        call_vl24h_employer_detail = PythonOperator(
+            task_id= f"daily_vl24h_employer_detail_{worker}",
+            python_callable=daily_vl24h_employer_detail,
+            op_kwargs={'worker': worker}
+        )
+         # Set the task dependencies
+        t_daily_vl24h_employer_sitemap >> call_vl24h_employer_detail >> t_daily_vl24h_employer_detail_to_postgres
+
+    # Ensure t_daily_vl24h_employer_sitemap_to_postgres runs in parallel with call_vl24h_employer_detail tasks
+    t_daily_vl24h_employer_sitemap >> t_daily_vl24h_employer_sitemap_to_postgres
+    
+    # Create the call_vl24h_jp_detail tasks for each worker
+    for worker in [1, 2]:
+        call_vl24h_jp_detail = PythonOperator(
+            task_id=f"daily_vl24h_job_post_detail_{worker}",
+            python_callable=daily_vl24h_job_post_detail,
+            op_kwargs={'worker': worker}
+        )
+         # Set the task dependencies
+        t_daily_vl24h_jp_sitemap >> call_vl24h_jp_detail >> t_daily_vl24h_jp_detail_to_postgres
+        
+    # Ensure t_daily_vl24h_jp_sitemap_to_postgres runs in parallel with call_vl24h_jp_detail tasks
+    t_daily_vl24h_jp_sitemap >> t_daily_vl24h_jp_sitemap_to_postgres
+    
 # [END tutorial]
 #noti

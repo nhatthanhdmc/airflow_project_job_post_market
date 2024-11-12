@@ -1,9 +1,5 @@
 """sitemap employer của cv chuẩn XML nên có thể dùng thư viện xml.etree.ElementTree
 """
-import multiprocessing.pool
-import os
-import sys 
-import json
 import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
@@ -13,7 +9,6 @@ from utils import config as cfg
 from datetime import date
 import re
 import time
-import multiprocessing
 
 ###########################################################################
 #### 1. Global variable
@@ -237,7 +232,7 @@ def crawl_employer_worker(employer_url):
             h3_elements = soup.select('#qc-box-communications > div > div:nth-child(2) > h3') 
             
             if soup.find('div', id='qc-box-recruiting'):
-                total_current_jobs = len(soup.soup.find('div', id='qc-box-recruiting').find_all('a'))
+                total_current_jobs = len(soup.find('div', id='qc-box-recruiting').find_all('a'))
                 
             if soup.find('div', id ='qc-content-introduction'):
                 about_us = soup.find('div', id ='qc-content-introduction').text.strip()
@@ -267,8 +262,7 @@ def crawl_employer_worker(employer_url):
                     "updated_date": today,
                     "total_current_jobs": total_current_jobs,
                     "worker": check_url_worker(employer_url)
-                }      
-            print(employer)                   
+                }                     
             mongodb = connect_mongodb()    
             mongodb.set_collection(mongo_conn['vl24h_employer_detail'])
             
@@ -336,31 +330,6 @@ def daily_employer_url_generator_airflow(worker):
         # break
     # Close the connection    
     mongodb.close()
- 
-def current_employer_process():
-    """
-    Process the pipeline to crawl and store data of employer url into mongodb - not use Airflow, use multiprocessing, yield
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """ 
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['vl24h_employer_detail'])    
-    # Delete current data
-    delete_filter = {
-                    "$or": [
-                        { "created_date": { "$eq": today } },
-                        { "updated_date": { "$eq": today } }
-                    ]
-                    }
-    mongodb.delete_many(delete_filter)
-    # Close the connection    
-    mongodb.close()
-    
-    # print('Start to crawl')
-    with multiprocessing.Pool(2) as pool:
-        # parallel the scapring process
-        pool.map(crawl_employer_worker, employer_url_generator())
         
 def daily_load_employer_detail_to_postgres():    
     """
@@ -397,8 +366,10 @@ if __name__ == "__main__":
     # daily_employer_sitemap_process()
     # daily_employer_sitemap_to_postgres()
     employer_url = 'https://vieclam24h.vn/danh-sach-tin-tuyen-dung-sieu-viet-group-ntd2411779p122.html'
-    crawl_employer_worker(employer_url)
-    daily_load_employer_detail_to_postgres()
+    # crawl_employer_worker(employer_url)
+    daily_employer_sitemap_process()
+    daily_employer_sitemap_to_postgres()
+    # daily_load_employer_detail_to_postgres()
      
 
     
