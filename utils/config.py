@@ -14,7 +14,11 @@ mongodb ={
         "vnw_job_post_sitemap":"vnw_job_post_sitemap",
         "vnw_job_post_detail":"vnw_job_post_detail",
         "vnw_employer_sitemap":"vnw_employer_sitemap",
-        "vnw_employer_detail":"vnw_employer_detail"
+        "vnw_employer_detail":"vnw_employer_detail",
+        "vl24h_job_post_sitemap":"vl24h_job_post_sitemap",
+        "vl24h_job_post_detail":"vl24h_job_post_detail",
+        "vl24h_employer_sitemap":"vl24h_employer_sitemap",
+        "vl24h_employer_detail":"vl24h_employer_detail"
             
     } 
 }
@@ -34,7 +38,11 @@ postgres ={
         "vnw_job_post_sitemap":"stg.vnw_job_post_sitemap",
         "vnw_job_post_detail":"stg.vnw_job_post_detail",
         "vnw_employer_sitemap":"stg.vnw_employer_sitemap",
-        "vnw_employer_detail":"stg.vnw_employer_detail"
+        "vnw_employer_detail":"stg.vnw_employer_detail",
+        "vl24h_job_post_sitemap":"stg.vl24h_job_post_sitemap",
+        "vl24h_job_post_detail":"stg.vl24h_job_post_detail",
+        "vl24h_employer_sitemap":"stg.vl24h_employer_sitemap",
+        "vl24h_employer_detail":"stg.vl24h_employer_detail"
     }
 }
 

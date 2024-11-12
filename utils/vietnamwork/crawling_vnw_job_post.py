@@ -207,16 +207,19 @@ def crawl_job_post_template(soup, job_url):
     # PART 1: TOP 
     if soup.find('h1', attrs = { 'name':'title'}):
         job_title = soup.find('h1', attrs = { 'name':'title'}).text.strip()
-    salary = soup.select('#vnwLayout__col > span')
-    
+        
     if soup.select('#vnwLayout__col > span'):
         salary = soup.select('#vnwLayout__col > span')[0].text.strip()
-    
+        
+    if soup.select('#vnwLayout__col > div > span'):
+        deadline = soup.select('#vnwLayout__col > div > span')[0].text.strip()
+        
     if len(soup.select('#vnwLayout__col > div > span')) >= 2:
         total_views = re.findall(r'\d+',soup.select('#vnwLayout__col > div > span')[1].text.strip())[0]
+        
+    if soup.select('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a'):
+        company_url = soup.select('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a')[0]['href']
     
-    if len(soup.select('#vnwLayout__col > div > span')) >= 3:
-        location = soup.select('#vnwLayout__col > div > span')[2].text.strip()
     # PART 2: BODY
     if soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p'):
        job_description = ''.join(p.text.strip() for p in soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')) 
@@ -249,8 +252,13 @@ def crawl_job_post_template(soup, job_url):
     specific_div = next((div for div in div_elements if "SỐ NĂM KINH NGHIỆM TỐI THIỂU" in div.text), None)
     if specific_div:
         experience = specific_div.find('p').text.strip()
+        
     # PART 1: BOTTOM
-    
+    div_elements = soup.select('#vnwLayout__col > div > div.sc-a137b890-0.bAqPjv')
+    specific_div = next((div for div in div_elements if "Địa điểm làm việc" in div.text), None)
+    if specific_div:
+        location = specific_div.find('p').text.strip()    
+       
     job = {
         "job_id":job_id,
         "job_url": job_url,
@@ -276,6 +284,7 @@ def crawl_job_post_template(soup, job_url):
         "worker" : check_url_worker(job_url)
     }   
     print(job)
+
     return job
 
 def crawl_job_post_worker(job_url):
@@ -383,5 +392,5 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    crawl_job_post_worker("https://www.vietnamworks.com/guest-relations-officer-1831989-jv")
+    crawl_job_post_worker("https://www.vietnamworks.com/customer-service-executive-1836550-jv")
     daily_load_job_post_detail_to_postgres()
