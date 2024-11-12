@@ -212,7 +212,7 @@ def crawl_employer_worker(employer_url):
     Returns: 
     """ 
     time.sleep(1) 
-    employer_id = employer_name = location = company_size = industry = website = about_us = None
+    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
     pattern = r'\.([A-Z0-9]+)\.html'
     match = re.search(pattern, employer_url)
     if match:
@@ -246,6 +246,10 @@ def crawl_employer_worker(employer_url):
                         website = li.find('span', class_='mdi-link').text.strip()
                 if  soup.find('div', class_='intro-section'):
                     about_us = soup.find('div', class_='intro-section').find('div', class_='box-text').text.strip()
+                    
+            if soup.find('div', class_='list-job'):
+                total_current_jobs = len(soup.find('div', class_='list-job').find_all('div', class_='job-item'))
+                
             employer = {
                     "employer_id": employer_id,
                     "employer_name": employer_name,
@@ -257,6 +261,7 @@ def crawl_employer_worker(employer_url):
                     "employer_url": employer_url,
                     "created_date": today,
                     "updated_date": today,
+                    "total_current_jobs": total_current_jobs,
                     "worker": check_url_worker(employer_url)
                 }      
                                

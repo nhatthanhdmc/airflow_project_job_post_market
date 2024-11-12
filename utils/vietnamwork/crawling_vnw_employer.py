@@ -195,7 +195,7 @@ def crawl_employer_template1(employer_url):
         employer (dict): containt all employer information
     """
     employer = {}
-    employer_id = employer_name = location = company_size = industry = website = about_us = None
+    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
     
     employer_id = generate_employer_id(employer_url)
     
@@ -224,7 +224,9 @@ def crawl_employer_template1(employer_url):
              
             if soup.find('div', class_='custom-story-item-content'):
                 about_us = soup.find('div', class_='custom-story-item-content').text.strip()   
-                
+            if soup.find('div', id='ajax_cp_our_jobs_listing'):
+               total_current_jobs = re.findall(r'\d+', soup.find('div', id='ajax_cp_our_jobs_listing').find('h3').text)[0]
+               
             employer = {
                     "employer_id": employer_id,
                     "employer_name": employer_name,
@@ -236,6 +238,7 @@ def crawl_employer_template1(employer_url):
                     "employer_url": employer_url,
                     "created_date": today,
                     "updated_date": today,
+                    "total_current_jobs": total_current_jobs,
                     "worker": check_url_worker(employer_url)
                 }
             
@@ -253,7 +256,7 @@ def crawl_employer_template2(employer_url):
         employer (dict): contain all employer information
     """
     employer = {}
-    employer_id = employer_name = location = company_size = industry = website = about_us = None
+    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
     
     employer_id = generate_employer_id(employer_url)
     
@@ -286,7 +289,10 @@ def crawl_employer_template2(employer_url):
                     
             if basic_info.select('#vnwLayout__col > p'):
                 about_us = basic_info.select('#vnwLayout__col > p')[0].get_text() 
-                
+             
+            if soup.find('div', id='OpeningJobHeader'):
+                total_current_jobs = re.findall(r'\d+', soup.find('div', id='OpeningJobHeader').find('h3').text)[0] 
+                 
             employer = {
                     "employer_id": employer_id,
                     "employer_name": employer_name,
@@ -298,6 +304,7 @@ def crawl_employer_template2(employer_url):
                     "employer_url": employer_url,
                     "created_date": today,
                     "updated_date": today,
+                    "total_current_jobs": total_current_jobs,
                     "worker": check_url_worker(employer_url)
                 }
             

@@ -209,7 +209,7 @@ def crawl_employer_worker(employer_url):
     Returns: 
     """ 
     time.sleep(1) 
-    employer_id = employer_name = location = company_size = industry = website = about_us = None
+    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
     pattern = r'(ntd\d+p\d+)\.html'
     match = re.search(pattern, employer_url)
     if match:
@@ -227,7 +227,6 @@ def crawl_employer_worker(employer_url):
         elif response.status_code == 200:
             # Crawl an employer
             soup = BeautifulSoup(response.content, parser) 
-            company_info = soup.find('div', class_='company-info')
             employer = {} 
             
             employer_name = soup.find('h1', id='qc-name-company').text.strip() if soup.find('h1', id='qc-name-company') else None
@@ -236,7 +235,13 @@ def crawl_employer_worker(employer_url):
                 website = soup.find('span', id='qc-website-company').find_parent()['title']
              
             h3_elements = soup.select('#qc-box-communications > div > div:nth-child(2) > h3') 
-                          
+            
+            if soup.find('div', id='qc-box-recruiting'):
+                total_current_jobs = len(soup.soup.find('div', id='qc-box-recruiting').find_all('a'))
+                
+            if soup.find('div', id ='qc-content-introduction'):
+                about_us = soup.find('div', id ='qc-content-introduction').text.strip()
+                      
             specific_h3= next((h3 for h3 in h3_elements if "Địa chỉ:" in h3.text), None)
             if specific_h3:
                 location = specific_h3.text.replace('Địa chỉ:', '').strip()
@@ -260,6 +265,7 @@ def crawl_employer_worker(employer_url):
                     "employer_url": employer_url,
                     "created_date": today,
                     "updated_date": today,
+                    "total_current_jobs": total_current_jobs,
                     "worker": check_url_worker(employer_url)
                 }      
             print(employer)                   
@@ -387,20 +393,12 @@ def daily_load_employer_detail_to_postgres():
     except Exception as e:
         print(f"Error transferring data: {e}")
 
-def delete_duplicate_employer_detail():
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['vl24h_employer_detail'])
-        # Delete duplicates based on specified key fields
-    key_fields = ["employer_id"]  # Fields to identify duplicates
-    condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
-    mongodb.delete_duplicates_with_condition(key_fields, condition)
-    mongodb.close()   
- 
 if __name__ == "__main__":  
     # daily_employer_sitemap_process()
     # daily_employer_sitemap_to_postgres()
     employer_url = 'https://vieclam24h.vn/danh-sach-tin-tuyen-dung-sieu-viet-group-ntd2411779p122.html'
     crawl_employer_worker(employer_url)
+    daily_load_employer_detail_to_postgres()
      
 
     
