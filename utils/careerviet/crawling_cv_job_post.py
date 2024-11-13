@@ -459,7 +459,6 @@ def crawl_job_post_worker(job_url):
     except requests.exceptions.RequestException as e:
         print(f"Error occurred: {str(e)}")
 
-
 def daily_job_url_generator_airflow(worker):
     """
     Generates job URLs assigned to a worker and crawls job posts using Airflow.
@@ -495,7 +494,6 @@ def daily_job_url_generator_airflow(worker):
     # Close the MongoDB connection
     mongodb.close()
 
-
 def delete_duplicate_job_post_detail():
     """
     Deletes duplicate job post details in MongoDB.
@@ -521,7 +519,6 @@ def delete_duplicate_job_post_detail():
 
     # Close the MongoDB connection
     mongodb.close()
-
 
 def daily_load_job_post_detail_to_postgres():
     """
