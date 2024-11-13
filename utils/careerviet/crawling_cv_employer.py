@@ -204,6 +204,35 @@ def check_url_worker(employer_url):
         return 1
     return 2
     
+def crawl_employer_template(employer_url):
+    """
+    Crawl employer url 
+    Args: 
+        employer_url (string): employer url
+    Returns:
+        employer (dict): containt all employer information
+    """
+    employer = {}
+    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
+        
+    try:
+        response = requests.get(url=employer_url,
+                                headers= headers)
+        parser = 'html.parser'
+        if response.status_code == 410:
+            print(f"Warning: XML resource might be unavailable (410 Gone).")
+            return  # Exit the function if it's a 410 error
+        elif response.status_code != 200:
+            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {employer_url}")
+        elif response.status_code == 200:
+            # craw an employer
+            soup = BeautifulSoup(response.content, parser) 
+            
+            
+    except requests.exceptions.RequestException as e:
+        print( f"Error occurred: {str(e)}")
+    return employer
+
 def crawl_employer_worker(employer_url):
     """
     Crawl a employer and save to mongodb

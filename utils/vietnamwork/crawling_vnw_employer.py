@@ -318,56 +318,37 @@ def crawl_employer_worker(employer_url):
     Args: 
         employer_url (string): employer url
     Returns: 
-    """   
-        
-    try:
-        response = requests.get(    url = employer_url, 
-                                    headers=headers)
-        parser = 'html.parser'
-        if response.status_code == 410:
-            print(f"Warning: XML resource might be unavailable (410 Gone).")
-            return  # Exit the function if it's a 410 error
-        elif response.status_code != 200:
-            raise Exception(f"Failed to fetch XML: {response.status_code}")
-        elif response.status_code == 200:
-            # Crawl job
-            soup = BeautifulSoup(response.content, parser) 
-            company_info = soup.find('div', class_='company-info')
-            employer = {} 
+    """  
             
-            pattern_recruiter = r"https://www\.vietnamworks\.com/nha-tuyen-dung/"
-            pattern_company = r"https://www\.vietnamworks\.com/company/"
+    pattern_recruiter = r"https://www\.vietnamworks\.com/nha-tuyen-dung/"
+    pattern_company = r"https://www\.vietnamworks\.com/company/"
 
-            # Check templete of url
-            if re.match(pattern_company, employer_url):
-                employer = crawl_employer_template1(employer_url)
-            elif re.match(pattern_recruiter, employer_url):
-                employer = crawl_employer_template2(employer_url)
-            else:
-                print("Employer url is undefined" )          
-            print(employer)
-            
-            mongodb = connect_mongodb() 
-            mongodb.set_collection(mongo_conn['vnw_employer_detail'])    
-            
-            # check employ_id exist or not
-            filter = {"employer_id": generate_employer_id(employer_url)}
-            
-            if len(mongodb.select(filter)) > 0:
-                print("Update ", filter)
-                # Remove the 'created_date' key from the dictionary
-                if "created_date" in employer:
-                    del employer["created_date"]
-                mongodb.update_one(filter, employer)
-            else:
-                print("Insert ", filter)                    
-                mongodb.insert_one(employer)
-                
-            # Close the connection    
-            mongodb.close()                      
-            # time.sleep(1) 
-    except requests.exceptions.RequestException as e:
-        print( f"Error occurred: {str(e)}")
+    # Check templete of url
+    if re.match(pattern_company, employer_url):
+        employer = crawl_employer_template1(employer_url)
+    elif re.match(pattern_recruiter, employer_url):
+        employer = crawl_employer_template2(employer_url)
+    else:
+        print("Employer url is undefined" )          
+        
+    mongodb = connect_mongodb() 
+    mongodb.set_collection(mongo_conn['vnw_employer_detail'])    
+    
+    # check employ_id exist or not
+    filter = {"employer_id": generate_employer_id(employer_url)}
+    
+    if len(mongodb.select(filter)) > 0:
+        print("Update ", filter)
+        # Remove the 'created_date' key from the dictionary
+        if "created_date" in employer:
+            del employer["created_date"]
+        mongodb.update_one(filter, employer)
+    else:
+        print("Insert ", filter)                    
+        mongodb.insert_one(employer)
+        
+    # Close the connection    
+    mongodb.close()  
            
 def employer_url_generator():    
     """
