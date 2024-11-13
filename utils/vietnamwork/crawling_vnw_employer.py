@@ -349,29 +349,6 @@ def crawl_employer_worker(employer_url):
         
     # Close the connection    
     mongodb.close()  
-           
-def employer_url_generator():    
-    """
-    Crawl all jobs in sitemap data and store into mongodb
-    Args: 
-        mongodb
-    Returns: employer url
-    """  
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
-    # Filter
-    filter = {"created_date": today}
-    # Projecttion: select only the "employer_url" field
-    projection = {"_id": False, "employer_url": True}
-    cursor = mongodb.select(filter, projection)
-    
-    # Extract job_url
-    for document in cursor: 
-        print(document["employer_url"])
-        yield document["employer_url"]
-    
-    # Close the connection    
-    mongodb.close()
 
 def daily_employer_url_generator_airflow(worker):    
     """
@@ -398,26 +375,6 @@ def daily_employer_url_generator_airflow(worker):
         # break
     # Close the connection    
     mongodb.close()
-    
-def current_employer_detail_process():
-    """
-    Process the pipeline to crawl and store data of employer url into mongodb
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """ 
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_employer_detail'])    
-     # Delete current data
-    delete_filter = {"created_date": today}
-    mongodb.delete_many(delete_filter)
-    # Close the connection    
-    mongodb.close()
-    
-    print('Start to crawl')
-    with multiprocessing.Pool(2) as pool:
-        # parallel the scapring process
-        pool.map(crawl_employer_worker, employer_url_generator())
 
 def daily_load_employer_detail_to_postgres():    
     """

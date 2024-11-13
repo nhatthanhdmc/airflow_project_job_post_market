@@ -18,6 +18,7 @@ import requests
 from bs4 import BeautifulSoup
 from utils.mongodb_connection import MongoDB
 from utils.postgres_connection import PostgresDB
+import utils.common as cm
 from utils import config as cfg
 from datetime import date
 import re
@@ -38,6 +39,7 @@ mongodb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
+pattern = r'\.([A-Z0-9]+)\.html'
 
 ###########################################################################
 #### 2. Connection
@@ -79,77 +81,91 @@ def connect_postgresdb():
 #### 3. Sitemap process: crawl => mongodb => postgres
 ###########################################################################
 def check_url_worker(job_url):
-    url_name = job_url[len('https://careerviet.vn/vi/tim-viec-lam/') : len('https://careerviet.vn/vi/tim-viec-lam/') +1]
-    # print(url_name)
+    """
+    Determines a worker ID based on the first character of the job URL.
+
+    This function extracts a character from the job URL to assign a worker ID.
+    If the character falls between 'a' to 'l', worker ID 1 is assigned;
+    otherwise, worker ID 2 is assigned.
+
+    Args:
+        job_url (str): The URL of the job posting.
+
+    Returns:
+        int: The worker ID assigned based on the extracted character (1 or 2).
+    """
+    # Extract a character after the base job URL prefix
+    base_url = 'https://careerviet.vn/vi/tim-viec-lam/'
+    url_name = job_url[len(base_url): len(base_url) + 1]  # Extracts the character at the expected position
+    
+    # Determine worker ID based on the character
     if url_name in 'abcdefghigkl':
         return 1
     return 2
 
 def crawl_job_post_sitemap(sitemap_url):
     """
-    Reads an XML URL containing URLs and saves them to a JSON file.
+    Reads an XML URL containing job URLs and extracts the necessary information.
+
     Args:
-        url (str): The URL of the XML file containing URLs.
-    Raises:
-        Exception: If the request fails or the XML parsing fails.           
-    Return:
-        List
-    """    
+        sitemap_url (str): The URL of the XML sitemap.
+
+    Returns:
+        list: A list of dictionaries, each containing data about a job post.
+    """
     list_url = []
     try:
-        response = requests.get(url = sitemap_url, 
-                                headers = headers)
-        
-        if response.status_code == 410:
-            print(f"Warning: XML resource might be unavailable (410 Gone).")
-            return  # Exit the function if it's a 410 error
-        elif response.status_code != 200:
-            raise Exception(f"Failed to fetch XML: {response.status_code}")
-        elif response.status_code == 200:
-            # Crawl sitemap
-            soup = BeautifulSoup(response.content, "xml")
+        response = requests.get(sitemap_url, headers=headers)
+        response.raise_for_status()  # Automatically raise an error for bad HTTP status codes
 
-            list_item = soup.find_all('url')
-            pattern = r'\.([A-Z0-9]+)\.html'
-            
-            for item in list_item:
-                job_url = item.find('loc').get_text() if item.find('loc') else None
-                job_id = re.search(pattern, job_url).group(1) if job_url else None
-                image = item.find('image:loc').get_text() if item.find('image:loc') else None
-                changefreq = item.find('changefreq').get_text() if item.find('changefreq') else None
-                lastmod = item.find('lastmod').get_text() if item.find('lastmod') else None
-                priority = item.find('priority').get_text() if item.find('priority') else None
-                
-                list_url.append(
-                    {
-                        "job_id" : job_id,
-                        "job_url": job_url,
-                        "image": image,
-                        "changefreq": changefreq,
-                        "lastmod": lastmod,
-                        "priority": priority,
-                        "created_date": today,
-                        "worker": check_url_worker(job_url)
-                    }
-                ) 
-                
-        return list_url    
+        # Parse the sitemap content with BeautifulSoup
+        soup = BeautifulSoup(response.content, "xml")
+        list_item = soup.find_all('url')
+
+        for item in list_item:
+            job_url = cm.extract_text(item, 'loc')
+            job_id = cm.extract_object_id(job_url, pattern)
+            image = cm.extract_text(item, 'image:loc')
+            changefreq = cm.extract_text(item, 'changefreq')
+            lastmod = cm.extract_text(item, 'lastmod')
+            priority = cm.extract_text(item, 'priority')
+
+            list_url.append({
+                "job_id": job_id,
+                "job_url": job_url,
+                "image": image,
+                "changefreq": changefreq,
+                "lastmod": lastmod,
+                "priority": priority,
+                "created_date": today,
+                "worker": check_url_worker(job_url)
+            })
+
     except requests.exceptions.RequestException as e:
-        print( f"Error occurred: {str(e)}")        
+        print(f"Error occurred while fetching the sitemap from {sitemap_url}: {e}")
+    
+    return list_url      
 
 def daily_job_post_sitemap_process():
     """
-    Process the pipeline to crawl and store data of sitemap url into mongodb
+    Crawls sitemap URL and stores the data into MongoDB.
+
+    This function retrieves job posts from the sitemap, deletes any existing records 
+    for the current date, and then inserts the newly fetched data into MongoDB.
+
     Args: 
-        mongodb: connection to mongodb
+        None
+
     Returns: 
+        None
     """ 
     mongodb = connect_mongodb()
+
     # Crawling sitemap
     sitemap_url = "https://careerviet.vn/sitemap/job_vi.xml" 
     list_url = crawl_job_post_sitemap(sitemap_url)
     
-     # Delete current data
+    # Delete current data
     delete_filter = {"created_date": today}
     mongodb.delete_many(delete_filter)
     
@@ -160,364 +176,394 @@ def daily_job_post_sitemap_process():
     mongodb.close()
     
 def daily_job_post_sitemap_to_postgres():     
+    """
+    Transfers job post sitemap data from MongoDB to PostgreSQL.
+
+    This function retrieves job posts from MongoDB and transfers the data to PostgreSQL.
+    It deletes existing records for the current date in PostgreSQL before inserting new data.
+
+    Args: 
+        None
+
+    Returns: 
+        None
+    """
     mongodb = postgresdb = None
     try:
+        # Connect to MongoDB
         mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['cv_job_post_sitemap']) 
+        mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
         filter = {"created_date": today}
         employer_docs = mongodb.select(filter)
         
+        # Connect to PostgreSQL
         postgresdb = connect_postgresdb()
-        # delete current data
+
+        # Delete current data from PostgreSQL
         condition_to_delete = {"created_date": today}
         deleted_rows = postgresdb.delete(postgres_conn['cv_job_post_sitemap'], condition_to_delete)
-        print(f'Delete {deleted_rows} job post sitemap urls')
-        # load current data
+        print(f'Delete {deleted_rows} job post sitemap URLs')
+
+        # Load new data into PostgreSQL
         for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            doc.pop('_id', None)  # Remove MongoDB-specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")
-            print("Inserting job_id: ", inserted_id)
+            print("Inserting job_id:", inserted_id)
        
-        # close connection
+        # Close connections
         mongodb.close()
         postgresdb.close_pool()
         print("Data transferred successfully")
+
     except Exception as e:
-        print(f"Error transferring data: {e}")     
+        print(f"Error transferring data: {e}")
+  
  
 ###########################################################################
 #### 4. Job post detail process:crawl => mongodb => postgres
 ###########################################################################
-     
-def job_url_generator():    
-    """
-    Crawl all jobs in sitemap data and store into mongodb
-    Args: 
-        mongodb
-    Returns: job url
-    """  
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
-    # Filter
-    filter = {"created_date": today}
-    # Projecttion: select only the "job_url" field
-    projection = {"_id": False, "job_url": True}
-    cursor = mongodb.select(filter, projection)
-    
-    # Extract job_url
-    for document in cursor:
-        print(document["job_url"])
-        yield document["job_url"]
-    
-    # Close the connection    
-    mongodb.close()
     
 def crawl_job_post_template1(soup, job_url):
     """
-    Crawl a job with template 1
-    Args: 
-        job_url (string): job url
-    Returns: job (json)
-    """ 
-    # Attribute
-    job = {}
-    job_id = job_title = company_url  = industry =  \
-    job_type = salary = experience = job_level = deadline = benefit = \
-    job_description = job_requirement = more_information = updated_date_on_web = None
-    
-    pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, job_url)
-    if match:
-        job_id = match.group(1)    
-        
-    # PART 1: TOP 
-    if soup.find('div', class_='head-left'):                
-        job_title = soup.find('div', class_='head-left').find('div', 'title').find('h2').text
-        if soup.find('div', class_='head-left').find('a'):
-            company_url = soup.find('div', class_='head-left').find('a').get('href')
-            
-    # PART 2: BODY
-    body = soup.find('div', class_='body-template').find('div', class_='content')
-    tr_tags = body.find_all('tr')
-    for tr in tr_tags:
-        if tr.find('em', class_='fa-id-badge'):
-            industry = ' '.join(a.text.strip() for a in tr.find('td', class_='content').find_all('a'))
-        if tr.find('em', class_='fa-usd'):
-            salary = tr.find('td', class_='content').find('strong').text.strip()
-        if tr.find('em', class_='mdi-briefcase-edit'):
-            job_type = tr.find('td', class_='content').find('p').text.strip()
-        if tr.find('em', class_='mdi-account'):
-            job_level = tr.find('td', class_='content').find('p').text.strip()
-        if tr.find('em', class_='fa-briefcase'):
-            experience = re.sub(r'\s+', ' ', tr.find('td', class_='content').find('p').text.strip())
-        if tr.find('em', class_='fa-calendar-times-o'):
-            deadline = tr.find('td', class_='content').find('p').text.strip()
-        if tr.find('em', class_='fa-calendar'):
-            updated_date_on_web = tr.find('td', class_='content').find('p').text.strip()
-        
-    # PART 3: BOTTOM
-    bottom = soup.find('div', class_='bottom-template').find('div', class_='full-content')
-    div_tags = bottom.find_all('div', class_= 'detail-row')
-    
-    if len(div_tags) > 2:
-        job_description = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in div_tags[1].find_all('p'))            
-        job_requirement = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in div_tags[2].find_all('p'))           
-        # Replace all sequences of whitespace characters with a single space
-        more_information =  ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in div_tags[3].find_all('li'))
-    
+    Crawl a job post from a given URL with template 1.
+
+    Args:
+        soup (BeautifulSoup object): Parsed HTML content of the job post page using BeautifulSoup.
+        job_url (str): The URL of the job post.
+
+    Returns:
+        dict: A dictionary containing job details.
+    """
+    # Initialize job dictionary with default None values
     job = {
-        "job_id":job_id,
+        "job_id": None,
         "job_url": job_url,
-        "job_title": job_title,
-        "company_url": company_url,
-        "updated_date_on_web": updated_date_on_web,
-        "industry": industry,
-        "job_type": job_type,
-        "salary": salary,
-        "experience": experience,
-        "job_level": job_level,
-        "deadline": deadline,
-        "benefit": benefit,
-        "job_description": job_description,
-        "job_requirement": job_requirement,
-        "more_information": more_information,
+        "job_title": None,
+        "company_url": None,
+        "updated_date_on_web": None,
+        "industry": None,
+        "job_type": None,
+        "salary": None,
+        "experience": None,
+        "job_level": None,
+        "deadline": None,
+        "benefit": None,
+        "job_description": None,
+        "job_requirement": None,
+        "more_information": None,
         "created_date": today,
-        "worker" : check_url_worker(job_url)
-    }   
+        "worker": check_url_worker(job_url)
+    }
+
+    # Extract job ID using the URL
+    job["job_id"] = cm.extract_object_id(job_url, pattern)
+
+    # PART 1: Extract TOP section (Job title, Company URL)
+    head_left = soup.find('div', class_='head-left')
+    if head_left:
+        job["job_title"] = cm.extract_text(head_left, 'h2', 'title')
+        company_link = head_left.find('a')
+        job["company_url"] = company_link.get('href') if company_link else None
+
+    # PART 2: Extract BODY section (Industry, Salary, Job Type, etc.)
+    body = soup.find('div', class_='body-template')
+    if body:
+        content = body.find('div', class_='content')
+        if content:
+            tr_tags = content.find_all('tr')
+            for tr in tr_tags:
+                icon_class = tr.find('em')['class'][0] if tr.find('em') else ''
+                td_content = tr.find('td', class_='content')
+                if td_content:
+                    if 'fa-id-badge' in icon_class:
+                        job["industry"] = ' '.join(a.text.strip() for a in td_content.find_all('a'))
+                    elif 'fa-usd' in icon_class:
+                        job["salary"] = cm.extract_text(td_content, 'strong')
+                    elif 'mdi-briefcase-edit' in icon_class:
+                        job["job_type"] = cm.extract_text(td_content, 'p')
+                    elif 'mdi-account' in icon_class:
+                        job["job_level"] = cm.extract_text(td_content, 'p')
+                    elif 'fa-briefcase' in icon_class:
+                        job["experience"] = re.sub(r'\s+', ' ', cm.extract_text(td_content, 'p'))
+                    elif 'fa-calendar-times-o' in icon_class:
+                        job["deadline"] = cm.extract_text(td_content, 'p')
+                    elif 'fa-calendar' in icon_class:
+                        job["updated_date_on_web"] = cm.extract_text(td_content, 'p')
+
+    # PART 3: Extract BOTTOM section (Job Description, Requirements, More Information)
+    bottom = soup.find('div', class_='bottom-template')
+    if bottom:
+        full_content = bottom.find('div', class_='full-content')
+        if full_content:
+            div_tags = full_content.find_all('div', class_='detail-row')
+            if len(div_tags) > 2:
+                job["job_description"] = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in div_tags[1].find_all('p'))
+                job["job_requirement"] = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in div_tags[2].find_all('p'))
+                job["more_information"] = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in div_tags[3].find_all('li'))
+
     return job
 
 def crawl_job_post_template2(soup, job_url):
     """
-    Crawl a job with template 2
-    Args: 
-        job_url (string): job url
-    Returns: job (json)
-    """ 
-    # Attribute
-    job = {}
-    job_id = job_title = company_url = location = industry =  \
-    job_type = salary = experience = job_level = deadline = benefit = \
-    job_description = job_requirement = more_information = None
-    
-    pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, job_url)
-    if match:
-        job_id = match.group(1)            
-    
-    
-    # Job title 
-    if soup.find('div', class_='job-desc'):                
-        job_title = soup.find('div', class_='job-desc').find('h1').text
-    
-    if soup.find('div', class_='job-desc').find('a') is not None:
-        company_url = soup.find('div', class_='job-desc').find('a').get('href') 
-    
-    job_detail_content = soup.find('div', id='tab-1').find('section', class_='job-detail-content')
-    
-    # PART 1: OVERVIEW
-    overview_div_tags = job_detail_content.find('div', class_='bg-blue').find_all('div', class_='col-lg-4 col-sm-6 item-blue') 
-    if len(overview_div_tags) > 2:        
-        # 1st dev    
-        location = overview_div_tags[0].find('div', class_='map').find('a').text.strip()                
-        # 2nd dev
-        li_tags = overview_div_tags[1].find_all('li')
-        for li in li_tags:
-            # updated_date
-            if li.find('em', class_='mdi-update'):
-                if li.find('em', class_='mdi-update').find_parent('li').find('p'):
-                    updated_date_on_web = li.find('em', class_='mdi-update').find_parent('li').find('p').text.strip()
-            # industry
-            if li.find('em', class_='mdi-briefcase'):
-                if li.find('em', class_='mdi-briefcase').find_parent('li').find('p'):
-                    industry = ' '.join(li.find('em', class_='mdi-briefcase').find_parent('li').find('p').text.strip().split())
-            # job_type
-            if li.find('em', class_='mdi-briefcase-edit'):
-                if li.find('em', class_='mdi-briefcase-edit').find_parent('li').find('p'):
-                    job_type = li.find('em', class_='mdi-briefcase-edit').find_parent('li').find('p').text.strip()  
-                    
-        # 3rd dev
-        li_tags = overview_div_tags[2].find_all('li')
-        for li in li_tags:
-            if li.find('i', class_="fa-usd"):
-                salary = li.find('i', class_="fa-usd").find_parent('li').find('p').text.strip()
-            if li.find('i', class_="fa-briefcase"):
-                experience = li.find('i', class_="fa-briefcase").find_parent('li').find('p').text.strip()
-            if li.find('i', class_="mdi-account"):
-                job_level = li.find('i', class_="mdi-account").find_parent('li').find('p').text.strip()
-            if li.find('i', class_="mdi-calendar-check"):
-                deadline = li.find('i', class_="mdi-calendar-check").find_parent('li').find('p').text.strip()
-    
-    # PART 2: DETAIL       
-    
-    detail_div_tags = job_detail_content.find_all('div', class_='detail-row')
-    
-    if len(detail_div_tags) > 3:                 
-        benefit = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in detail_div_tags[0].find_all('li'))            
-        job_description = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in detail_div_tags[1].find_all('p'))            
-        job_requirement = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in detail_div_tags[2].find_all('p'))           
-        # Replace all sequences of whitespace characters with a single space
-        more_information =  ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in detail_div_tags[3].find_all('li'))
-                    
+    Crawls a job post with Template 2 format and returns job details in JSON format.
+
+    Args:
+        soup (BeautifulSoup object): Parsed HTML content of the job post page using BeautifulSoup.
+        job_url (str): URL of the job post.
+
+    Returns:
+        dict: A dictionary containing the job details.
+    """
+    # Initialize job dictionary with default None values
     job = {
-        "job_id":job_id,
+        "job_id": None,
         "job_url": job_url,
-        "job_title": job_title,
-        "company_url": company_url,
-        "location": location,
-        "updated_date_on_web": updated_date_on_web,
-        "industry": industry,
-        "job_type": job_type,
-        "salary": salary,
-        "experience": re.sub(r'\s+',' ', experience) if experience is not None else None,
-        "job_level": job_level,
-        "deadline": deadline,
-        "benefit": benefit,
-        "job_description": job_description,
-        "job_requirement": job_requirement,
-        "more_information": more_information,
+        "job_title": None,
+        "company_url": None,
+        "location": None,
+        "updated_date_on_web": None,
+        "industry": None,
+        "job_type": None,
+        "salary": None,
+        "experience": None,
+        "job_level": None,
+        "deadline": None,
+        "benefit": None,
+        "job_description": None,
+        "job_requirement": None,
+        "more_information": None,
         "created_date": today,
-        "worker" : check_url_worker(job_url)
+        "worker": check_url_worker(job_url)
     }
-    # print(job)
+
+    # Extract job ID using the URL
+    job["job_id"] = cm.extract_object_id(job_url, pattern)
+
+    # PART 1: Extract Job Title, Company URL
+    job_desc = soup.find('div', class_='job-desc')
+    if job_desc:
+        job_title = job_desc.find('h1')
+        if job_title:
+            job["job_title"] = job_title.get_text(strip=True)
+
+        company_link = job_desc.find('a')
+        if company_link:
+            job["company_url"] = company_link.get('href')
+
+    # PART 2: OVERVIEW Section Extraction
+    job_detail_content = soup.find('div', id='tab-1')
+    if job_detail_content:
+        overview_section = job_detail_content.find('section', class_='job-detail-content')
+        if overview_section:
+            overview_div_tags = overview_section.find('div', class_='bg-blue').find_all('div', class_='col-lg-4 col-sm-6 item-blue')
+
+            if len(overview_div_tags) > 2:
+                # Extract Location
+                location_div = overview_div_tags[0].find('a', class_='map')
+                if location_div:
+                    job["location"] = location_div.get_text(strip=True)
+
+                # Extract Updated Date, Industry, Job Type
+                li_tags_1 = overview_div_tags[1].find_all('li')
+                for li in li_tags_1:
+                    icon = li.find('em')
+                    if icon:
+                        icon_class = icon.get('class', [None])[0]
+                        content_p = li.find('p')
+                        if icon_class == 'mdi-update' and content_p:
+                            job["updated_date_on_web"] = content_p.get_text(strip=True)
+                        elif icon_class == 'mdi-briefcase' and content_p:
+                            job["industry"] = ' '.join(content_p.get_text(strip=True).split())
+                        elif icon_class == 'mdi-briefcase-edit' and content_p:
+                            job["job_type"] = content_p.get_text(strip=True)
+
+                # Extract Salary, Experience, Job Level, Deadline
+                li_tags_2 = overview_div_tags[2].find_all('li')
+                for li in li_tags_2:
+                    icon = li.find('i')
+                    if icon:
+                        icon_class = icon.get('class', [None])[0]
+                        content_p = li.find('p')
+                        if icon_class == 'fa-usd' and content_p:
+                            job["salary"] = content_p.get_text(strip=True)
+                        elif icon_class == 'fa-briefcase' and content_p:
+                            job["experience"] = re.sub(r'\s+', ' ', content_p.get_text(strip=True))
+                        elif icon_class == 'mdi-account' and content_p:
+                            job["job_level"] = content_p.get_text(strip=True)
+                        elif icon_class == 'mdi-calendar-check' and content_p:
+                            job["deadline"] = content_p.get_text(strip=True)
+
+    # PART 3: DETAIL Section Extraction
+    if job_detail_content:
+        detail_div_tags = job_detail_content.find_all('div', class_='detail-row')
+
+        if len(detail_div_tags) > 3:
+            # Extract Benefits, Job Description, Job Requirements, and More Information
+            job["benefit"] = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in detail_div_tags[0].find_all('li'))
+            job["job_description"] = ';'.join(re.sub(r'\s+', ' ', p.get_text(strip=True)) for p in detail_div_tags[1].find_all('p'))
+            job["job_requirement"] = ';'.join(re.sub(r'\s+', ' ', p.get_text(strip=True)) for p in detail_div_tags[2].find_all('p'))
+            job["more_information"] = ';'.join(re.sub(r'\s+', ' ', li.get_text(strip=True)) for li in detail_div_tags[3].find_all('li'))
+
     return job
 
 def crawl_job_post_worker(job_url):
     """
-    Crawl a job
-    Args: 
-        url (string): job url
-    Returns: 
-    """ 
-    time.sleep(1) 
+    Crawls job post details from a given job URL and stores or updates them in MongoDB.
+
+    Args:
+        job_url (str): The URL of the job post to crawl.
+
+    Returns:
+        None
+    """
+    time.sleep(1)  # Rate-limiting to prevent overloading the server
     try:
-        response = requests.get(    url = job_url, 
-                                    headers=headers)
+        response = requests.get(url=job_url, headers=headers)
         parser = 'html.parser'
+
         if response.status_code == 410:
             print(f"Warning: XML resource might be unavailable (410 Gone).")
             return  # Exit the function if it's a 410 error
         elif response.status_code != 200:
-            
-            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {job_url}")
-        elif response.status_code == 200:
-            # Crawl job
-            soup = BeautifulSoup(response.content, parser) 
-            job = {}  
-            if soup.find('section', class_='search-result-list-detail template-2'):
-                job = crawl_job_post_template2(soup, job_url)
-            elif soup.find('section', class_='template01-banner'):
-                job = crawl_job_post_template1(soup, job_url)
-            
-            mongodb = connect_mongodb()    
-            mongodb.set_collection(mongo_conn['cv_job_post_detail'])
-            
-            if job:
-                filter = {"job_id": job["job_id"]}
-                
-                if len(mongodb.select(filter)) > 0:
-                    print("Update ", filter)
-                    # Remove the 'created_date' key from the dictionary
-                    if "created_date" in job:
-                        del job["created_date"]
-                    mongodb.update_one(filter, job)
-                else:
-                    print("Insert ", filter)
-                    mongodb.insert_one(job)
-                
-                # Close the connection    
-                mongodb.close()            
-                # time.sleep(1) 
-    except requests.exceptions.RequestException as e:
-        print( f"Error occurred: {str(e)}")
+            raise Exception(f"Failed to fetch XML: {response.status_code}, URL: {job_url}")
 
-def daily_job_url_generator_airflow(worker):    
+        # Parse the job post
+        soup = BeautifulSoup(response.content, parser)
+        job = {}
+
+        # Determine job template and extract data
+        if soup.find('section', class_='search-result-list-detail template-2'):
+            job = crawl_job_post_template2(soup, job_url)
+        elif soup.find('section', class_='template01-banner'):
+            job = crawl_job_post_template1(soup, job_url)
+
+        # Connect to MongoDB
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_job_post_detail'])
+
+        if job:
+            filter = {"job_id": job["job_id"]}
+
+            # Update or insert job post
+            if mongodb.select(filter):
+                print("Update", filter)
+                job.pop("created_date", None)  # Remove the 'created_date' key if exists
+                mongodb.update_one(filter, job)
+            else:
+                print("Insert", filter)
+                mongodb.insert_one(job)
+
+            # Close the MongoDB connection    
+            mongodb.close()
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error occurred: {str(e)}")
+
+
+def daily_job_url_generator_airflow(worker):
     """
-    Crawl all jobs in sitemap data and store into mongodb using Airflow
-    Args: 
-        worker
-    Returns: job url
-    """  
+    Generates job URLs assigned to a worker and crawls job posts using Airflow.
+
+    This function fetches job URLs assigned to a specific worker, crawls each URL, 
+    and stores the job post details into MongoDB.
+
+    Args:
+        worker (str): Worker identifier for assigning jobs.
+
+    Returns:
+        None
+    """
     mongodb = connect_mongodb()
     mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
-    # Filter
+
+    # Filter for URLs assigned to the worker and created today
     filter = {"created_date": today, "worker": worker}
-    # Projecttion: select only the "job_url" field
     projection = {"_id": False, "job_url": True}
     cursor = mongodb.select(filter, projection)
+
+    # Crawl and process each job URL
     count = 0
-    # Extract job_url
     for document in cursor:
-        print(document["job_url"])
-        crawl_job_post_worker(document["job_url"]) 
-        count += 1
-        if  count > 4:
-            break
-        #     break   
-    # Close the connection    
+        job_url = document.get("job_url")
+        if job_url:
+            print(job_url)
+            crawl_job_post_worker(job_url)
+            count += 1
+            if count > 4:
+                break
+
+    # Close the MongoDB connection
     mongodb.close()
-    
-def current_job_post_process():
-    """
-    Process the pipeline to crawl and store data of job url into mongodb
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """ 
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_job_post_detail'])    
-     # Delete current data
-    delete_filter = {
-                    "$or": [
-                        { "created_date": { "$eq": today } },
-                        { "updated_date": { "$eq": today } }
-                    ]
-                    }
-    mongodb.delete_many(delete_filter)
-    # Close the connection    
-    mongodb.close()
-    
-    with multiprocessing.Pool(2) as pool:
-        # parallel the scapring process
-        pool.map(crawl_job_post_worker, job_url_generator())
-    
+
+
 def delete_duplicate_job_post_detail():
+    """
+    Deletes duplicate job post details in MongoDB.
+
+    This function removes duplicate job post records from MongoDB based on specified key fields.
+    Only records created on or after June 1, 2024, are considered for duplicate deletion.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     mongodb = connect_mongodb()
     mongodb.set_collection(mongo_conn['cv_job_post_detail'])
-     # Delete duplicates based on specified key fields
-    key_fields = ["job_id", "job_title"]  # Fields to identify duplicates
-    condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
+
+    # Define keys to identify duplicates and condition to filter documents
+    key_fields = ["job_id", "job_title"]
+    condition = {"created_date": {"$gte": "2024-06-01"}}
+
+    # Delete duplicates
     mongodb.delete_duplicates_with_condition(key_fields, condition)
+
+    # Close the MongoDB connection
     mongodb.close()
-      
-def daily_load_job_post_detail_to_postgres():       
+
+
+def daily_load_job_post_detail_to_postgres():
     """
-    Process the pipeline to transfer job post detail from mongodb to postgres using Airflow
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """   
+    Transfers job post details from MongoDB to PostgreSQL using Airflow.
+
+    This function loads all job post details from MongoDB and transfers the data to PostgreSQL.
+    It first truncates the existing data in the target PostgreSQL table before inserting new records.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     mongodb = postgresdb = None
     try:
+        # Connect to MongoDB
         mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['cv_job_post_detail']) 
-        # load full
+        mongodb.set_collection(mongo_conn['cv_job_post_detail'])
+
+        # Load all job post details from MongoDB
         employer_docs = mongodb.select()
-        
+
+        # Connect to PostgreSQL
         postgresdb = connect_postgresdb()
-        # truncate
+
+        # Truncate the target PostgreSQL table
         postgresdb.truncate_table(postgres_conn["cv_job_post_detail"])
-        # load full
+
+        # Insert documents into PostgreSQL
         for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_job_post_detail"], doc, "job_id")
-            print("Inserting job_id: ", inserted_id)
-       
-        # close connection
+            print(f"Inserting job_id: {inserted_id}")
+
+        # Close connections
         mongodb.close()
         postgresdb.close_pool()
         print("Data transferred successfully")
+
     except Exception as e:
-        print(f"Error transferring data: {e}") 
+        print(f"Error transferring data: {e}")
        
 # if __name__ == "__main__": 
 #     daily_load_job_post_detail_to_postgres() 

@@ -4,6 +4,18 @@ from psycopg2 import sql
 
 class PostgresDB:
     def __init__(self, dbname, user, password, host='localhost', port=5432, minconn=1, maxconn=10):
+        """
+        Initializes the PostgresDB instance and sets up connection parameters.
+
+        Args:
+            dbname (str): Name of the database.
+            user (str): Database username.
+            password (str): Password for the database user.
+            host (str): Database server address (default is 'localhost').
+            port (int): Port number (default is 5432).
+            minconn (int): Minimum number of connections in the pool.
+            maxconn (int): Maximum number of connections in the pool.
+        """
         self.dbname = dbname
         self.user = user
         self.password = password
@@ -14,6 +26,9 @@ class PostgresDB:
         self.connection_pool = None
 
     def initialize_pool(self):
+        """
+        Initializes the connection pool for PostgreSQL connections.
+        """
         try:
             self.connection_pool = psycopg2.pool.SimpleConnectionPool(
                 self.minconn,
@@ -29,11 +44,20 @@ class PostgresDB:
             print(f"Error creating connection pool: {e}")
 
     def close_pool(self):
+        """
+        Closes all connections in the pool.
+        """
         if self.connection_pool:
             self.connection_pool.closeall()
         print("Connection pool closed")
 
     def get_connection(self):
+        """
+        Retrieves a connection from the connection pool.
+
+        Returns:
+            A connection object from the pool, or None if an error occurs.
+        """
         try:
             return self.connection_pool.getconn()
         except Exception as e:
@@ -41,12 +65,29 @@ class PostgresDB:
             return None
 
     def put_connection(self, conn):
+        """
+        Returns a connection back to the connection pool.
+
+        Args:
+            conn: The connection object to return.
+        """
         try:
             self.connection_pool.putconn(conn)
         except Exception as e:
             print(f"Error returning connection to pool: {e}")
 
     def insert(self, table, data, id_name):
+        """
+        Inserts a single row into the specified table.
+
+        Args:
+            table (str): The name of the table.
+            data (dict): A dictionary representing the row to be inserted.
+            id_name (str): The name of the ID column to be returned.
+
+        Returns:
+            The ID of the inserted row, or None if an error occurs.
+        """
         conn = self.get_connection()
         if not conn:
             return None
@@ -71,7 +112,73 @@ class PostgresDB:
         finally:
             self.put_connection(conn)
 
+    def insert_many(self, table, data_list, id_name=None):
+        """
+        Inserts multiple rows into the specified table.
+
+        Args:
+            table (str): The table name.
+            data_list (list of dict): A list of dictionaries, each representing a row to be inserted.
+            id_name (str, optional): If specified, returns the IDs of inserted rows.
+
+        Returns:
+            list: A list of IDs of inserted rows, if `id_name` is provided.
+        """
+        if not data_list:
+            print("No data to insert.")
+            return []
+
+        conn = self.get_connection()
+        if not conn:
+            return []
+
+        try:
+            cursor = conn.cursor()
+            columns = data_list[0].keys()
+            values_template = f"({', '.join(['%s'] * len(columns))})"
+            values = []
+
+            for data in data_list:
+                values.append([data[column] for column in columns])
+
+            insert_statement = f"""
+                INSERT INTO {table} ({', '.join(columns)}) 
+                VALUES {', '.join([values_template for _ in data_list])}
+            """
+
+            flattened_values = [item for sublist in values for item in sublist]
+            if id_name:
+                insert_statement += f" RETURNING {id_name}"
+
+            cursor.execute(insert_statement, flattened_values)
+            conn.commit()
+
+            if id_name:
+                inserted_ids = [row[0] for row in cursor.fetchall()]
+            else:
+                inserted_ids = []
+
+            cursor.close()
+            return inserted_ids
+        except Exception as e:
+            conn.rollback()
+            print(f"Error inserting multiple rows: {e}")
+            return []
+        finally:
+            self.put_connection(conn)
+
     def update(self, table, data, condition):
+        """
+        Updates rows in the specified table that match the given condition.
+
+        Args:
+            table (str): The name of the table.
+            data (dict): A dictionary containing the columns and their new values.
+            condition (dict): A dictionary representing the condition to match rows.
+
+        Returns:
+            int: The number of rows updated.
+        """
         conn = self.get_connection()
         if not conn:
             return None
@@ -94,6 +201,16 @@ class PostgresDB:
             self.put_connection(conn)
 
     def delete(self, table, condition):
+        """
+        Deletes rows from the specified table that match the given condition.
+
+        Args:
+            table (str): The name of the table.
+            condition (dict): A dictionary representing the condition to match rows.
+
+        Returns:
+            int: The number of rows deleted.
+        """
         conn = self.get_connection()
         if not conn:
             return None
@@ -115,6 +232,17 @@ class PostgresDB:
             self.put_connection(conn)
 
     def select(self, table, columns='*', condition=None):
+        """
+        Selects rows from the specified table, with optional conditions.
+
+        Args:
+            table (str): The name of the table.
+            columns (str or list): Columns to be selected (default is '*').
+            condition (dict, optional): A dictionary representing the condition to match rows.
+
+        Returns:
+            list: A list of tuples representing the selected rows.
+        """
         conn = self.get_connection()
         if not conn:
             return None
@@ -138,6 +266,12 @@ class PostgresDB:
             self.put_connection(conn)
             
     def truncate_table(self, table):
+        """
+        Truncates the specified table, removing all data.
+
+        Args:
+            table (str): The name of the table to truncate.
+        """
         conn = self.get_connection()
         if not conn:
             return None
@@ -154,30 +288,50 @@ class PostgresDB:
         finally:
             self.put_connection(conn)
 
-# Example usage:
-# if __name__ == "__main__":
-#     db = PostgresDB(dbname='your_dbname', user='your_user', password='your_password', host='your_host', port='your_port')
-    
-#     db.initialize_pool()
-    
-#     # Insert example
-#     data_to_insert = {"column1": "value1", "column2": "value2"}
-#     inserted_id = db.insert("your_table", data_to_insert)
-#     print(f"Inserted record ID: {inserted_id}")
+### Example Usage for All Functions
 
-#     # Update example
-#     data_to_update = {"column1": "new_value1"}
-#     condition_to_update = {"column2": "value2"}
-#     updated_rows = db.update("your_table", data_to_update, condition_to_update)
-#     print(f"Number of rows updated: {updated_rows}")
+if __name__ == "__main__":
+    # Initialize and set up the connection pool
+    db = PostgresDB(
+        dbname='your_dbname',
+        user='your_user',
+        password='your_password',
+        host='your_host',
+        port='your_port'
+    )
+    db.initialize_pool()
 
-#     # Delete example
-#     condition_to_delete = {"column1": "value1"}
-#     deleted_rows = db.delete("your_table", condition_to_delete)
-#     print(f"Number of rows deleted: {deleted_rows}")
+    # Insert Example
+    data_to_insert = {"column1": "value1", "column2": "value2"}
+    inserted_id = db.insert("your_table", data_to_insert, id_name="id")
+    print(f"Inserted record ID: {inserted_id}")
 
-#     # Select example
-#     selected_data = db.select("your_table", columns="column1, column2", condition={"column2": "value2"})
-#     print(f"Selected data: {selected_data}")
-    
-#     db.close_pool()
+    # Insert Many Example
+    data_list_to_insert = [
+        {"column1": "value1", "column2": "value2"},
+        {"column1": "value3", "column2": "value4"},
+        {"column1": "value5", "column2": "value6"}
+    ]
+    inserted_ids = db.insert_many("your_table", data_list_to_insert, id_name="id")
+    print(f"Inserted record IDs: {inserted_ids}")
+
+    # Update Example
+    data_to_update = {"column1": "updated_value1"}
+    condition_to_update = {"column2": "value2"}
+    updated_rows = db.update("your_table", data_to_update, condition_to_update)
+    print(f"Number of rows updated: {updated_rows}")
+
+    # Delete Example
+    condition_to_delete = {"column1": "value1"}
+    deleted_rows = db.delete("your_table", condition_to_delete)
+    print(f"Number of rows deleted: {deleted_rows}")
+
+    # Select Example
+    selected_data = db.select("your_table", columns="column1, column2", condition={"column2": "value4"})
+    print(f"Selected data: {selected_data}")
+
+    # Truncate Table Example
+    db.truncate_table("your_table")
+
+    # Close the connection pool
+    db.close_pool()

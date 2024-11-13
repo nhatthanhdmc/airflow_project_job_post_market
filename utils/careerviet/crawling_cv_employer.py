@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from utils.mongodb_connection import MongoDB
 from utils.postgres_connection import PostgresDB
+import utils.common as cm
 from utils import config as cfg
 from datetime import date
 import re
@@ -30,6 +31,7 @@ mongodb = postgresdb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
+pattern = r'\.([A-Z0-9]+)\.html'
 
 ###########################################################################
 #### 2. Connection
@@ -74,79 +76,69 @@ def connect_postgresdb():
 
 def crawl_employer_sitemap(url):
     """
-    Reads an XML URL containing URLs and saves them to a JSON file.
+    Reads an XML sitemap URL and extracts employer URLs and related metadata.
+
     Args:
-        url (str): The URL of the XML file containing URLs.
-    Raises:
-        Exception: If the request fails or the XML parsing fails.           
-    Return:
-        List of sitemap url
-    """    
+        url (str): The URL of the XML file containing employer data.
+
+    Returns:
+        list: A list of dictionaries, each containing metadata about the employer URLs.
+    """
+    namespaces = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
     list_url = []
-    pattern = r'\.([A-Z0-9]+)\.html'
+
     try:
-        response = requests.get(url = url, 
-                                headers = headers)
-        
-        if response.status_code == 410:
-            print(f"Warning: XML resource might be unavailable (410 Gone).")
-            return  # Exit the function if it's a 410 error
-        elif response.status_code != 200:
-            raise Exception(f"Failed to fetch XML: {response.status_code}")
-        elif response.status_code == 200:
-            """ Solution 1 - Using BeautifulSoup
-            """
-            # # Crawl sitemap
-            # soup = BeautifulSoup(response.content, "xml")
-            # list_item = soup.find_all('url')
-        
-            # for item in list_item:
-            #     employer_url = item.find('loc').get_text() if item.find('loc') else None
-            #     employer_id = re.search(pattern, employer_url).group(1) if employer_url else None
-            #     changefreq = item.find('changefreq').get_text() if item.find('changefreq') else None
-            #     lastmod = item.find('lastmod').get_text() if item.find('lastmod') else None
-                
-            #     list_url.append(
-            #         {
-            #             "employer_id": employer_id,
-            #             "employer_url": employer_url,
-            #             "changefreq": changefreq,
-            #             "lastmod": lastmod,
-            #             "created_date": today
-            #         }
-            #     ) 
-            """
-            Solution 2: Using ElementTree + BeautifulSoup
-            """
-            root = ET.fromstring(response.content)
-            namespaces = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}  # Namespace for the sitemap
-            for url in root.findall('ns:url', namespaces):
-                employer_url = url.find('ns:loc', namespaces).text.strip()
-                employer_id = re.search(pattern, employer_url).group(1) if employer_url else None
-                changefreq = url.find('ns:changefreq', namespaces)
-                lastmod = url.find('ns:lastmod', namespaces)
-                
-                list_url.append({
-                    "employer_id": employer_id,
-                    'employer_url': employer_url,
-                    'changefreq': changefreq.text.strip() if changefreq is not None else None,
-                    'lastmod': lastmod.text.strip() if lastmod is not None else None,
-                    "created_date": today,
-                    "worker": check_url_worker(employer_url)
-                })
-            
-        return list_url    
+        # Step 1: Fetch the sitemap
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise HTTPError for bad responses (e.g., 4xx, 5xx)
+
+        # Step 2: Parse the sitemap using ElementTree
+        root = ET.fromstring(response.content)
+        print("Sitemap fetched and parsed successfully.")
+
+        # Step 3: Extract relevant fields from each <url> tag
+        for url_tag in root.findall('ns:url', namespaces):
+            employer_url = cm.extract_text(url_tag, 'ns:loc', namespaces)
+
+            # Skip entries without employer URLs
+            if not employer_url:
+                continue
+
+            employer_id = cm.extract_object_id(employer_url, pattern)
+            changefreq = cm.extract_text(url_tag, 'ns:changefreq', namespaces)
+            lastmod = cm.extract_text(url_tag, 'ns:lastmod', namespaces)
+
+            list_url.append({
+                "employer_id": employer_id,
+                'employer_url': employer_url,
+                'changefreq': changefreq,
+                'lastmod': lastmod,
+                "created_date": date.today(),
+                "worker": check_url_worker(employer_url)
+            })
+
     except requests.exceptions.RequestException as e:
-        print( f"Error occurred: {str(e)}")         
-    
+        print(f"Error occurred during request to URL {url}: {e}")
+    except ET.ParseError as e:
+        print(f"Error parsing XML from URL {url}: {e}")
+
+    return list_url
+       
 def daily_employer_sitemap_process():
     """
-    Process the pipeline to crawl and store data of sitemap url into mongodb
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """ 
+    Crawls the employer sitemap and stores the data in MongoDB.
+    - Fetches employer data from the sitemap URL.
+    - Deletes existing records for today.
+    - Inserts the new data into MongoDB.
+    
+    Args:
+        None
+        
+    Returns:
+        None
+    """
     mongodb = connect_mongodb()
+    
     # Crawling sitemap
     sitemap_url = "https://careerviet.vn/sitemap/employer.xml"
     list_url = crawl_employer_sitemap(sitemap_url)
@@ -163,30 +155,40 @@ def daily_employer_sitemap_process():
  
 def daily_employer_sitemap_to_postgres():  
     """
-    Process the pipeline to transfer employer sitemap from mongodb to postgres
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """    
+    Transfers employer sitemap data from MongoDB to PostgreSQL.
+    - Retrieves today's records from MongoDB.
+    - Deletes existing data in PostgreSQL for today.
+    - Inserts new records from MongoDB into PostgreSQL.
+    
+    Args:
+        None
+        
+    Returns:
+        None
+    """
     mongodb = postgresdb = None
     try:
+        # Connect to MongoDB
         mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['cv_employer_sitemap']) 
+        mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
         filter = {"created_date": today}
         employer_docs = mongodb.select(filter)
         
+        # Connect to PostgreSQL
         postgresdb = connect_postgresdb()
-        # delete current data
+
+        # Delete current data from PostgreSQL
         condition_to_delete = {"created_date": today}
         deleted_rows = postgresdb.delete(postgres_conn['vnw_employer_sitemap'], condition_to_delete)
         print(f'Delete {deleted_rows} employer sitemap urls')
-        # load new data
+
+        # Load new data into PostgreSQL
         for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            doc_id = doc.pop('_id', None)  # Remove MongoDB-specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_employer_sitemap"], doc, "employer_id")
             print("Inserting employer_id: ", inserted_id)
        
-        # close connection
+        # Close MongoDB connection
         mongodb.close()
         
         print("Data transferred successfully")
@@ -198,234 +200,208 @@ def daily_employer_sitemap_to_postgres():
 ###########################################################################
  
 def check_url_worker(employer_url):
-    url_name = employer_url[len('https://careerviet.vn/vi/nha-tuyen-dung/'): len('https://careerviet.vn/vi/nha-tuyen-dung/') + 1]
-    # print(url_name)
-    if url_name in 'c':
+    """
+    Determines a worker ID based on the first character of the employer URL.
+
+    This function extracts the first character following the base employer URL to assign a worker ID.
+    If the character is 'c', worker ID 1 is assigned; otherwise, worker ID 2 is assigned.
+
+    Args:
+        employer_url (str): The URL of the employer page.
+
+    Returns:
+        int: The worker ID assigned based on the extracted character (1 or 2).
+    """
+    # Define base URL and extract the character after it
+    base_url = 'https://careerviet.vn/vi/nha-tuyen-dung/'
+    url_name = employer_url[len(base_url): len(base_url) + 1]  # Extracts the character following the base URL
+    
+    # Determine worker ID based on the character
+    if url_name == 'c':
         return 1
     return 2
-    
+
+
 def crawl_employer_template(employer_url):
     """
-    Crawl employer url 
-    Args: 
-        employer_url (string): employer url
+    Crawl employer details from the given employer URL.
+
+    Args:
+        employer_url (str): URL of the employer page.
+
     Returns:
-        employer (dict): containt all employer information
+        dict: Dictionary containing the extracted employer data.
     """
-    employer = {}
-    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
-        
+    # Optional sleep for rate-limiting
+    time.sleep(1)
+
+    # Extract employer_id using regex
+    match = re.search(pattern, employer_url)
+    employer_id = match.group(1) if match else None
+    if not employer_id:
+        return None
+
     try:
-        response = requests.get(url=employer_url,
-                                headers= headers)
-        parser = 'html.parser'
-        if response.status_code == 410:
-            print(f"Warning: XML resource might be unavailable (410 Gone).")
-            return  # Exit the function if it's a 410 error
-        elif response.status_code != 200:
-            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {employer_url}")
-        elif response.status_code == 200:
-            # craw an employer
-            soup = BeautifulSoup(response.content, parser) 
-            
-            
+        response = requests.get(employer_url, headers=headers)
+        response.raise_for_status()  # Automatically raises an error for bad HTTP status codes
+
+        # Parse content using BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Extract details
+        company_info = soup.find('div', class_='company-info')
+        employer_name = company_info.find('h1', class_='name').text.strip() if company_info and company_info.find('h1', class_='name') else None
+        location = soup.find('div', class_='content').find('p').text.strip() if soup.find('div', class_='content') and soup.find('div', class_='content').find('p') else None
+
+        company_size = industry = website = about_us = None
+        li_tags = soup.find_all('li')
+        for li in li_tags:
+            if li.find('span', class_='mdi-account-supervisor'):
+                company_size = li.find('span', class_='mdi-account-supervisor').text.strip()
+            elif li.find('span', class_='mdi-gavel'):
+                industry = li.find('span', class_='mdi-gavel').text.strip()
+            elif li.find('span', class_='mdi-link'):
+                website = li.find('span', class_='mdi-link').text.strip()
+
+        intro_section = soup.find('div', class_='intro-section')
+        about_us = intro_section.find('div', class_='box-text').text.strip() if intro_section and intro_section.find('div', class_='box-text') else None
+
+        # Count current jobs listed
+        list_job_section = soup.find('div', class_='list-job')
+        total_current_jobs = len(list_job_section.find_all('div', class_='job-item')) if list_job_section else 0
+
+        # Compile the employer data into a dictionary
+        employer_data = {
+            "employer_id": employer_id,
+            "employer_name": employer_name,
+            "location": location,
+            "company_size": company_size,
+            "industry": industry,
+            "website": website,
+            "about_us": about_us,
+            "employer_url": employer_url,
+            "created_date": today,
+            "updated_date": today,
+            "total_current_jobs": total_current_jobs,
+            "worker": check_url_worker(employer_url),
+        }
+
+        return employer_data
+
     except requests.exceptions.RequestException as e:
-        print( f"Error occurred: {str(e)}")
-    return employer
+        print(f"Error occurred while crawling URL {employer_url}: {e}")
+        return None
 
 def crawl_employer_worker(employer_url):
     """
-    Crawl a employer and save to mongodb
-    Args: 
-        url (string): employer url
-    Returns: 
-    """ 
-    time.sleep(1) 
-    employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
+    Crawl employer data from the provided URL and update or insert into MongoDB.
+
+    Args:
+        employer_url (str): URL of the employer page.
+    """
     pattern = r'\.([A-Z0-9]+)\.html'
     match = re.search(pattern, employer_url)
-    if match:
-        employer_id = match.group(1)
-        
-    try:
-        response = requests.get(    url = employer_url, 
-                                    headers=headers)
-        parser = 'html.parser'
-        if response.status_code == 410:
-            print(f"Warning: XML resource might be unavailable (410 Gone).")
-            return  # Exit the function if it's a 410 error
-        elif response.status_code != 200:
-            raise Exception(f"Failed to fetch XML: {response.status_code}, url is {employer_url}")
-        elif response.status_code == 200:
-            # Crawl an employer
-            soup = BeautifulSoup(response.content, parser) 
-            company_info = soup.find('div', class_='company-info')
-            employer = {} 
-            
-            if company_info:
-                employer_name = company_info.find('h1', class_='name').text.strip() if company_info.find('h1', class_='name') else None
-                location = soup.find('div', class_='content').find('p').text.strip() if soup.find('p').text.strip() else None
-                li_tags = soup.find_all('li')
-                for li in li_tags:
-                    if li.find('span', class_='mdi-account-supervisor'):
-                        company_size = li.find('span', class_='mdi-account-supervisor').text.strip()
-                    if li.find('span', class_='mdi-gavel'):
-                        industry = li.find('span', class_='mdi-gavel').text.strip()
-                    if li.find('span', class_='mdi-link'):
-                        website = li.find('span', class_='mdi-link').text.strip()
-                if  soup.find('div', class_='intro-section'):
-                    about_us = soup.find('div', class_='intro-section').find('div', class_='box-text').text.strip()
-                    
-            if soup.find('div', class_='list-job'):
-                total_current_jobs = len(soup.find('div', class_='list-job').find_all('div', class_='job-item'))
-                
-            employer = {
-                    "employer_id": employer_id,
-                    "employer_name": employer_name,
-                    "location" : location,
-                    "company_size" : company_size,
-                    "industry" : industry,
-                    "website" : website,
-                    "about_us" : about_us,                
-                    "employer_url": employer_url,
-                    "created_date": today,
-                    "updated_date": today,
-                    "total_current_jobs": total_current_jobs,
-                    "worker": check_url_worker(employer_url)
-                }      
-                               
-            mongodb = connect_mongodb()    
-            mongodb.set_collection(mongo_conn['cv_employer_detail'])
-            
-            # check employ_id exist or not
-            filter = {"employer_id": employer_id}
-            if len(mongodb.select(filter)) > 0:
-                print("Update ", filter)
-                # Remove the 'created_date' key from the dictionary
-                if "created_date" in employer:
-                    del employer["created_date"]
-                mongodb.update_one(filter, employer)
-            else:
-                print("Insert ", filter)                    
-                mongodb.insert_one(employer)
-            # Close the connection    
-            mongodb.close()  
-    except requests.exceptions.RequestException as e:
-        print( f"Error occurred: {str(e)}")
-           
-def employer_url_generator():    
-    """
-    Crawl all jobs in sitemap data and store into mongodb - not use Airflow, use multiprocessing, yield
-    Args: 
-        mongodb
-    Returns: employer url
-    """  
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
-    # Filter
-    filter = {"created_date": today}
-    # Projecttion: select only the "job_url" field
-    projection = {"_id": False, "employer_url": True}
-    cursor = mongodb.select(filter, projection)
-    
-    # Extract job_url
-    for document in cursor: 
-        print(document["employer_url"])
-        yield document["employer_url"]
-    
+    if not match:
+        return
+
+    employer_id = match.group(1)
+
+    mongodb = connect_mongodb()    
+    mongodb.set_collection(mongo_conn['cv_employer_detail'])
+
+    employer = crawl_employer_template(employer_url)
+
+    # Check if employer_id exists
+    filter = {"employer_id": employer_id}
+    existing_record = mongodb.select(filter)
+
+    if existing_record:
+        print("Update ", filter)
+        # Remove the 'created_date' key from the dictionary for an update
+        employer.pop("created_date", None)
+        mongodb.update_one(filter, employer)
+    else:
+        print("Insert ", filter)
+        mongodb.insert_one(employer)
+
     # Close the connection    
     mongodb.close()
-    
+
 def daily_employer_url_generator_airflow(worker):    
     """
-    Crawl all jobs in sitemap data and store into mongodb using Airflow
+    Generate employer URLs, crawl them, and store results into MongoDB using Airflow.
+
     Args: 
-        worker
-    Returns: employer url
-    """  
+        worker (str): Worker identifier.
+
+    Returns:
+        None
+    """
     mongodb = connect_mongodb()
     mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
-    # Filter
+
+    # Filter for URLs last modified today and assigned to the given worker
     filter = {"lastmod": today, "worker": worker}
-    # Projecttion: select only the "job_url" field
     projection = {"_id": False, "employer_url": True}
     cursor = mongodb.select(filter, projection)
+
     count = 0
-    # Extract job_url
-    for document in cursor: 
-        print(document["employer_url"])
-        crawl_employer_worker(document["employer_url"])  
-        count += 1
-        if  count > 4:
-            break
-        # break
+    for document in cursor:
+        employer_url = document.get("employer_url")
+        if employer_url:
+            print(employer_url)
+            crawl_employer_worker(employer_url)
+            count += 1
+            if count >= 5:
+                break
+
     # Close the connection    
     mongodb.close()
- 
-def current_employer_process():
-    """
-    Process the pipeline to crawl and store data of employer url into mongodb - not use Airflow, use multiprocessing, yield
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """ 
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_employer_detail'])    
-    # Delete current data
-    delete_filter = {
-                    "$or": [
-                        { "created_date": { "$eq": today } },
-                        { "updated_date": { "$eq": today } }
-                    ]
-                    }
-    mongodb.delete_many(delete_filter)
-    # Close the connection    
-    mongodb.close()
-    
-    # print('Start to crawl')
-    with multiprocessing.Pool(2) as pool:
-        # parallel the scapring process
-        pool.map(crawl_employer_worker, employer_url_generator())
-        
+
 def daily_load_employer_detail_to_postgres():    
     """
-    Process the pipeline to transfer employer detail from mongodb to postgres using Airflow
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """  
+    Transfer employer details from MongoDB to PostgreSQL.
+
+    - Fetches all employer details from MongoDB.
+    - Truncates the PostgreSQL employer detail table.
+    - Inserts all records from MongoDB into PostgreSQL.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
     mongodb = postgresdb = None
     try:
         mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['cv_employer_detail']) 
-        # load full
-        employer_docs = mongodb.select()
+        mongodb.set_collection(mongo_conn['cv_employer_detail'])
         
+        # Load all employer details from MongoDB
+        employer_docs = mongodb.select()
+
+        # Connect to PostgreSQL
         postgresdb = connect_postgresdb()
-        # truncate 
+
+        # Truncate the target PostgreSQL table
         postgresdb.truncate_table(postgres_conn["cv_employer_detail"])
-        # load full
+
+        # Insert documents into PostgreSQL
         for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            doc.pop('_id', None)  # Remove MongoDB-specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_employer_detail"], doc, "employer_id")
-            print("Inserting employer_id: ", inserted_id)
-       
-        # close connection
+            print(f"Inserting employer_id: {inserted_id}")
+
+        # Close connections
         mongodb.close()
         postgresdb.close_pool()
-        
+
         print("Data transferred successfully")
+
     except Exception as e:
         print(f"Error transferring data: {e}")
 
-def delete_duplicate_employer_detail():
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_employer_detail'])
-        # Delete duplicates based on specified key fields
-    key_fields = ["employer_id"]  # Fields to identify duplicates
-    condition = {"created_date": {"$gte": "2024-06-01"}}  # Condition to filter documents
-    mongodb.delete_duplicates_with_condition(key_fields, condition)
-    mongodb.close()   
+
  
 # if __name__ == "__main__":  
     # daily_load_employer_sitemap_to_postgres()

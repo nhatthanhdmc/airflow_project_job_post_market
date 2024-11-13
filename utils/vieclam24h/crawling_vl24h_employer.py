@@ -25,6 +25,7 @@ mongodb = postgresdb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
+pattern = r'(ntd\d+p\d+)\.html'
 
 ###########################################################################
 #### 2. Connection
@@ -78,7 +79,6 @@ def crawl_employer_sitemap(url):
         List of sitemap url
     """    
     list_url = []
-    pattern = r'(ntd\d+p\d+)\.html'
     try:
         response = requests.get(url = url, 
                                 headers = headers)
@@ -205,7 +205,7 @@ def crawl_employer_worker(employer_url):
     """ 
     time.sleep(1) 
     employer_id = employer_name = location = company_size = industry = website = about_us = total_current_jobs = None
-    pattern = r'(ntd\d+p\d+)\.html'
+    
     match = re.search(pattern, employer_url)
     if match:
         employer_id = match.group(1)
@@ -281,29 +281,6 @@ def crawl_employer_worker(employer_url):
             mongodb.close()  
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")
-           
-def employer_url_generator():    
-    """
-    Crawl all jobs in sitemap data and store into mongodb - not use Airflow, use multiprocessing, yield
-    Args: 
-        mongodb
-    Returns: employer url
-    """  
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['vl24h_employer_sitemap'])
-    # Filter
-    filter = {"created_date": today}
-    # Projecttion: select only the "job_url" field
-    projection = {"_id": False, "employer_url": True}
-    cursor = mongodb.select(filter, projection)
-    
-    # Extract job_url
-    for document in cursor: 
-        print(document["employer_url"])
-        yield document["employer_url"]
-    
-    # Close the connection    
-    mongodb.close()
     
 def daily_employer_url_generator_airflow(worker):    
     """
@@ -322,7 +299,6 @@ def daily_employer_url_generator_airflow(worker):
     count = 0
     # Extract job_url
     for document in cursor: 
-        print(document["employer_url"])
         crawl_employer_worker(document["employer_url"])  
         count += 1
         if  count > 4:
