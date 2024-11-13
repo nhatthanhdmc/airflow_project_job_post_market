@@ -221,7 +221,7 @@ def crawl_job_post_template1(soup, job_url):
     """ 
     # Attribute
     job = {}
-    job_id = job_title = company_url  = updated_date = industry =  \
+    job_id = job_title = company_url  = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
     job_description = job_requirement = more_information = updated_date_on_web = None
     
@@ -255,7 +255,7 @@ def crawl_job_post_template1(soup, job_url):
         if tr.find('em', class_='fa-calendar'):
             updated_date_on_web = tr.find('td', class_='content').find('p').text.strip()
         
-    # PART 1: BOTTOM
+    # PART 3: BOTTOM
     bottom = soup.find('div', class_='bottom-template').find('div', class_='full-content')
     div_tags = bottom.find_all('div', class_= 'detail-row')
     
@@ -282,7 +282,6 @@ def crawl_job_post_template1(soup, job_url):
         "job_requirement": job_requirement,
         "more_information": more_information,
         "created_date": today,
-        "updated_date": today,
         "worker" : check_url_worker(job_url)
     }   
     return job
@@ -296,7 +295,7 @@ def crawl_job_post_template2(soup, job_url):
     """ 
     # Attribute
     job = {}
-    job_id = job_title = company_url = location = updated_date = industry =  \
+    job_id = job_title = company_url = location = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
     job_description = job_requirement = more_information = None
     
@@ -377,7 +376,6 @@ def crawl_job_post_template2(soup, job_url):
         "job_requirement": job_requirement,
         "more_information": more_information,
         "created_date": today,
-        "updated_date": today,
         "worker" : check_url_worker(job_url)
     }
     # print(job)

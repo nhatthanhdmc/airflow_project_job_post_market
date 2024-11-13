@@ -194,7 +194,7 @@ def crawl_job_post_template(soup, job_url):
     """ 
     # Attribute
     job = {}
-    job_id = job_title = location = company_url  = updated_date = industry =  \
+    job_id = job_title = location = company_url  = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
     job_description = job_requirement = more_information = \
     updated_date_on_web = total_views = posted_date = field = None
@@ -253,7 +253,7 @@ def crawl_job_post_template(soup, job_url):
     if specific_div:
         experience = specific_div.find('p').text.strip()
         
-    # PART 1: BOTTOM
+    # PART 3: BOTTOM
     div_elements = soup.select('#vnwLayout__col > div > div.sc-a137b890-0.bAqPjv')
     specific_div = next((div for div in div_elements if "Địa điểm làm việc" in div.text), None)
     if specific_div:
@@ -278,7 +278,6 @@ def crawl_job_post_template(soup, job_url):
         "job_requirement": job_requirement,
         "more_information": more_information,
         "created_date": today,
-        "updated_date": today,
         "total_views": total_views,
         "posted_date": posted_date,
         "worker" : check_url_worker(job_url)

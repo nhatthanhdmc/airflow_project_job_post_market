@@ -196,10 +196,11 @@ def crawl_job_post_template(soup, job_url):
     """ 
     # Attribute
     job = {}
-    job_id = job_title = location = company_url  = updated_date = industry =  \
+    job_id = job_title = location = company_url  = industry =  \
     job_type = salary = experience = job_level = deadline = benefit = \
     job_description = job_requirement = more_information = \
-    updated_date_on_web = total_views = posted_date = field = None
+    updated_date_on_web = total_views = posted_date = field =\
+    probation_time = num_of_recruitments = working_type = qualifications = None
     
     pattern = r'/(\d+)$'
     match = re.search(pattern, job_url)
@@ -207,59 +208,81 @@ def crawl_job_post_template(soup, job_url):
         job_id = match.group(1)    
         
     # PART 1: TOP 
-    if soup.find('h1', attrs = { 'name':'title'}):
-        job_title = soup.find('h1', attrs = { 'name':'title'}).text.strip()
+    if soup.find('h1'):
+        job_title = soup.find('h1').text.strip()
         
-    if soup.select('#vnwLayout__col > span'):
-        salary = soup.select('#vnwLayout__col > span')[0].text.strip()
-        
-    if soup.select('#vnwLayout__col > div > span'):
-        deadline = soup.select('#vnwLayout__col > div > span')[0].text.strip()
-        
-    if len(soup.select('#vnwLayout__col > div > span')) >= 2:
-        total_views = re.findall(r'\d+',soup.select('#vnwLayout__col > div > span')[1].text.strip())[0]
-        
-    if soup.select('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a'):
-        company_url = soup.select('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a')[0]['href']
+    h2_elements = soup.find_all('h2', class_=['text-14', 'leading-6'])
     
+    specific_h2 = next((h2 for h2 in h2_elements if 'Mức lương' in h2.text), None)
+    if specific_h2:
+        salary = specific_h2.find_all('p')[1].text.strip()
+        
+    specific_h2 = next((h2 for h2 in h2_elements if 'Hạn nộp hồ sơ' in h2.text), None)
+    if specific_h2:
+        deadline = specific_h2.find_all('p')[1].text.strip()
+            
+    if soup.find('span', class_='font-semibold'):
+        updated_date_on_web = soup.find('span', class_='font-semibold').text.strip()
+        
     # PART 2: BODY
-    if soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p'):
-       job_description = ''.join(p.text.strip() for p in soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')) 
+    h3_elements = soup.find_all('h3', class_='ml-3')    
     
-    if soup.find_all('div', attrs={'data-benefit-name': True}):
-        benefit = '\n '.join([div.text.strip() for div in soup.find_all('div', attrs={'data-benefit-name': True})])
+    specific_h3 = next((h3 for h3 in h3_elements if 'Ngày đăng' in h3.text), None)
+    if specific_h3:
+        posted_date = datetime.strptime(specific_h3.find_all('p')[1].text.strip(), r"%d/%m/%Y")
     
-    div_elements = soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju')
-    
-    specific_div = next((div for div in div_elements if "NGÀY ĐĂNG" in div.text), None)
-    if specific_div:
-        posted_date = datetime.strptime(specific_div.find('p').text.strip(), r"%d/%m/%Y")
-    
-    specific_div = next((div for div in div_elements if "CẤP BẬC" in div.text), None)
-    if specific_div:
-        job_level = specific_div.find('p').text.strip()
+    specific_h3 = next((h3 for h3 in h3_elements if 'Thời gian thử việc' in h3.text), None)
+    if specific_h3:
+        probation_time = specific_h3.find_all('p')[1].text.strip()
         
-    specific_div = next((div for div in div_elements if "NGÀNH NGHỀ" in div.text), None)
-    if specific_div:
-        field = specific_div.find('p').text.strip()
+    specific_h3 = next((h3 for h3 in h3_elements if 'Cấp bậc' in h3.text), None)
+    if specific_h3:
+        job_level = specific_h3.find_all('p')[1].text.strip()
+        
+    specific_h3 = next((h3 for h3 in h3_elements if 'Số lượng tuyển' in h3.text), None)
+    if specific_h3:
+        num_of_recruitments = specific_h3.find_all('p')[1].text.strip()
+        
+    specific_h3 = next((h3 for h3 in h3_elements if 'Hình thức làm việc' in h3.text), None)
+    if specific_h3:
+        working_type = specific_h3.find_all('p')[1].text.strip()
+        
+    specific_h3 = next((h3 for h3 in h3_elements if 'Yêu cầu bằng cấp' in h3.text), None)
+    if specific_h3:
+        qualifications = specific_h3.find_all('p')[1].text.strip()
+        
+    specific_h3 = next((h3 for h3 in h3_elements if 'Yêu cầu kinh nghiệm' in h3.text), None)
+    if specific_h3:
+        experience = specific_h3.find_all('p')[1].text.strip()
+
+    specific_h3 = next((h3 for h3 in h3_elements if 'Ngành nghề' in h3.text), None)
+    if specific_h3:
+        industry = specific_h3.find_all('p')[1].text.strip()
+        
+   
+    job_description = '\n'.join([
+                                    li.text.strip() for div in soup.find_all('div', class_="jsx-5b2773f86d2f74b")
+                                    if div.find('h2') and 'Mô tả công việc' in div.find('h2').text.strip()
+                                    for li in div.find_all('li')
+                                ])
     
-    specific_div = next((div for div in div_elements if "KỸ NĂNG" in div.text), None)
+    job_requirement = '\n'.join([
+                                    li.text.strip() for div in soup.find_all('div', class_="jsx-5b2773f86d2f74b")
+                                    if div.find('h2') and 'Yêu cầu công việc' in div.find('h2').text.strip()
+                                    for li in div.find_all('li')
+                                ])   
+    
+    benefit = '\n'.join([
+                                    li.text.strip() for div in soup.find_all('div', class_="jsx-5b2773f86d2f74b")
+                                    if div.find('h2') and 'Quyền lợi' in div.find('h2').text.strip()
+                                    for li in div.find_all('li')
+                                ]) 
+            
+    specific_div = next((div for div in soup.find_all('div', class_="jsx-5b2773f86d2f74b") if 'Địa điểm làm việc' in div.text), None)
     if specific_div:
-        job_requirement = specific_div.find('p').text.strip()
-        
-    specific_div = next((div for div in div_elements if "LĨNH VỰC" in div.text), None)
-    if specific_div:
-        industry = specific_div.find('p').text.strip()   
-        
-    specific_div = next((div for div in div_elements if "SỐ NĂM KINH NGHIỆM TỐI THIỂU" in div.text), None)
-    if specific_div:
-        experience = specific_div.find('p').text.strip()
-        
-    # PART 1: BOTTOM
-    div_elements = soup.select('#vnwLayout__col > div > div.sc-a137b890-0.bAqPjv')
-    specific_div = next((div for div in div_elements if "Địa điểm làm việc" in div.text), None)
-    if specific_div:
-        location = specific_div.find('p').text.strip()    
+        location = specific_div.find_all('span')[1].text.strip()
+    # PART 3: BOTTOM
+    
        
     job = {
         "job_id":job_id,
@@ -280,9 +303,12 @@ def crawl_job_post_template(soup, job_url):
         "job_requirement": job_requirement,
         "more_information": more_information,
         "created_date": today,
-        "updated_date": today,
         "total_views": total_views,
         "posted_date": posted_date,
+        "probation_time": probation_time,
+        "num_of_recruitments": num_of_recruitments,
+        "working_type": working_type,
+        "qualifications": qualifications,
         "worker" : check_url_worker(job_url)
     }   
     print(job)
@@ -394,5 +420,6 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    daily_job_post_sitemap_process()
-    daily_job_post_sitemap_to_postgres()
+    job_url = 'https://vieclam24h.vn/short/job/3129570'
+    crawl_job_post_worker(job_url)
+    daily_load_job_post_detail_to_postgres()
