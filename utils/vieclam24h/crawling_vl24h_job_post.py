@@ -80,40 +80,58 @@ def check_url_worker(job_url):
         return 1
     return 2
 
+def extract_text(parent, tag, namespaces=None):
+    """
+    Helper function to extract text from an XML element.
+    
+    Args:
+        parent: Parent XML element.
+        tag (str): Tag name to search within the parent element.
+        namespaces (dict, optional): Namespaces to use for searching, if the XML uses namespaces.
+    
+    Returns:
+        str or None: The stripped text of the tag or None if the tag is not found.
+    """
+    element = parent.find(tag, namespaces) if namespaces else parent.find(tag)
+    return element.text.strip() if element is not None and element.text else None
+
 def crawl_job_post_sitemap(url):
     """
-    Reads an XML URL containing URLs and saves them to a JSON file.
+    Reads an XML URL containing job posting URLs and returns a list of job metadata.
+    
     Args:
-        url (str): The URL of the XML file containing URLs.
-    Raises:
-        Exception: If the request fails or the XML parsing fails.           
-    Return:
-        List of URLs and associated metadata.
-    """    
+        url (str): The URL of the XML file containing job post URLs.
+
+    Returns:
+        list: A list of dictionaries, each containing job URL and related metadata.
+    """
     pattern = r'/(\d+)$'
     namespaces = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
-    headers = {"User-Agent": "Mozilla/5.0"}  # Add your user agent here
+    headers = {"User-Agent": "Mozilla/5.0"}  # User agent to prevent access restrictions
     list_url = []
 
     try:
-        # Step 1: Fetch the sitemap
+        # Fetch the sitemap
         response = requests.get(url=url, headers=headers)
-        response.raise_for_status()  # Automatically raise an exception for 4xx/5xx responses
-        
-        if response.status_code == 410:
-            print(f"Warning: XML resource might be unavailable (410 Gone).")
-            return list_url  # Exit the function if it's a 410 error
-        
-        # Step 2: Parse the sitemap using ElementTree
+        response.raise_for_status()
+
+        # Parse the sitemap
         root = ET.fromstring(response.content)
         print("Sitemap fetched and parsed successfully.")
 
-        # Step 3: Extract relevant fields from each <url> tag
+        # Extract relevant fields from each <url> tag
         for url_tag in root.findall('ns:url', namespaces):
             job_url = extract_text(url_tag, 'ns:loc', namespaces)
-            job_id = re.search(pattern, job_url).group(1) if job_url else None
-            
-            list_url.append({
+
+            # Skip entries without job URLs
+            if not job_url:
+                continue
+
+            job_id_match = re.search(pattern, job_url)
+            job_id = job_id_match.group(1) if job_id_match else None
+
+            # Build job entry
+            job_entry = {
                 'job_url': job_url,
                 'job_id': job_id,
                 'changefreq': extract_text(url_tag, 'ns:changefreq', namespaces),
@@ -121,16 +139,16 @@ def crawl_job_post_sitemap(url):
                 'priority': extract_text(url_tag, 'ns:priority', namespaces),
                 'created_date': datetime.today(),
                 'worker': check_url_worker(job_url)
-            })
-            
-        return list_url
-    
+            }
+
+            list_url.append(job_entry)
+
     except requests.exceptions.RequestException as e:
-        print(f"Error occurred during request: {str(e)}")
+        print(f"Error occurred during request to URL {url}: {str(e)}")
     except ET.ParseError as e:
-        print(f"Error occurred during XML parsing: {str(e)}")
-    
-    return list_url 
+        print(f"Error parsing XML from URL {url}: {str(e)}")
+
+    return list_url
 
 def daily_job_post_sitemap_process(sitemap_urls=None):
     """
