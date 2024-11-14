@@ -153,29 +153,39 @@ def daily_job_post_sitemap_process():
     This function retrieves job posts from the sitemap, deletes any existing records 
     for the current date, and then inserts the newly fetched data into MongoDB.
 
-    Args: 
+    Args:
         None
 
-    Returns: 
+    Returns:
         None
-    """ 
-    mongodb = connect_mongodb()
+    """
+    mongodb = None
+    try:
+        # Connect to MongoDB
+        mongodb = connect_mongodb()
 
-    # Crawling sitemap
-    sitemap_url = "https://careerviet.vn/sitemap/job_vi.xml" 
-    list_url = crawl_job_post_sitemap(sitemap_url)
+        # Crawling sitemap
+        sitemap_url = "https://careerviet.vn/sitemap/job_vi.xml"
+        list_url = crawl_job_post_sitemap(sitemap_url)
+
+        # Delete current data for today
+        delete_filter = {"created_date": today}
+        mongodb.delete_many(delete_filter)
+
+        # Insert the newly fetched data into MongoDB
+        mongodb.insert_many(list_url)
+
+        print("Sitemap data successfully processed and inserted into MongoDB.")
+
+    except Exception as e:
+        print(f"Error during daily job post sitemap process: {e}")
+
+    finally:
+        # Close MongoDB connection if it was opened
+        if mongodb:
+            mongodb.close()
     
-    # Delete current data
-    delete_filter = {"created_date": today}
-    mongodb.delete_many(delete_filter)
-    
-    # Load current data
-    mongodb.insert_many(list_url)
-    
-    # Close the connection    
-    mongodb.close()
-    
-def daily_job_post_sitemap_to_postgres():     
+def daily_job_post_sitemap_to_postgres():
     """
     Transfers job post sitemap data from MongoDB to PostgreSQL.
 
@@ -193,32 +203,38 @@ def daily_job_post_sitemap_to_postgres():
         # Connect to MongoDB
         mongodb = connect_mongodb()
         mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
+        
+        # Retrieve job post documents created today from MongoDB
         filter = {"created_date": today}
         employer_docs = mongodb.select(filter)
-        
+
         # Connect to PostgreSQL
         postgresdb = connect_postgresdb()
 
-        # Delete current data from PostgreSQL
+        # Delete existing records for the current date from PostgreSQL
         condition_to_delete = {"created_date": today}
         deleted_rows = postgresdb.delete(postgres_conn['cv_job_post_sitemap'], condition_to_delete)
-        print(f'Delete {deleted_rows} job post sitemap URLs')
+        print(f"Deleted {deleted_rows} job post sitemap URLs")
 
-        # Load new data into PostgreSQL
+        # Insert new records into PostgreSQL
         for doc in employer_docs:
             doc.pop('_id', None)  # Remove MongoDB-specific ID
             inserted_id = postgresdb.insert(postgres_conn["cv_job_post_sitemap"], doc, "job_id")
-            print("Inserting job_id:", inserted_id)
-       
-        # Close connections
-        mongodb.close()
-        postgresdb.close_pool()
+            print(f"Inserting job_id: {inserted_id}")
+
+        # Print success message
         print("Data transferred successfully")
 
     except Exception as e:
         print(f"Error transferring data: {e}")
-  
- 
+
+    finally:
+        # Ensure connections are properly closed
+        if mongodb:
+            mongodb.close()
+        if postgresdb:
+            postgresdb.close_pool()
+   
 ###########################################################################
 #### 4. Job post detail process:crawl => mongodb => postgres
 ###########################################################################
@@ -501,24 +517,31 @@ def delete_duplicate_job_post_detail():
     This function removes duplicate job post records from MongoDB based on specified key fields.
     Only records created on or after June 1, 2024, are considered for duplicate deletion.
 
-    Args:
-        None
-
     Returns:
         None
     """
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_job_post_detail'])
+    mongodb = None
+    try:
+        # Connect to MongoDB
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_job_post_detail'])
 
-    # Define keys to identify duplicates and condition to filter documents
-    key_fields = ["job_id", "job_title"]
-    condition = {"created_date": {"$gte": "2024-06-01"}}
+        # Define keys to identify duplicates and condition to filter documents
+        key_fields = ["job_id", "job_title"]
+        condition = {"created_date": {"$gte": "2024-06-01"}}
 
-    # Delete duplicates
-    mongodb.delete_duplicates_with_condition(key_fields, condition)
+        # Delete duplicates
+        mongodb.delete_duplicates_with_condition(key_fields, condition)
 
-    # Close the MongoDB connection
-    mongodb.close()
+        print("Duplicate job post details deleted successfully.")
+
+    except Exception as e:
+        print(f"Error deleting duplicate job post details: {e}")
+
+    finally:
+        # Ensure the MongoDB connection is closed properly
+        if mongodb:
+            mongodb.close()
 
 def daily_load_job_post_detail_to_postgres():
     """
@@ -554,13 +577,18 @@ def daily_load_job_post_detail_to_postgres():
             inserted_id = postgresdb.insert(postgres_conn["cv_job_post_detail"], doc, "job_id")
             print(f"Inserting job_id: {inserted_id}")
 
-        # Close connections
-        mongodb.close()
-        postgresdb.close_pool()
+        # Print success message
         print("Data transferred successfully")
 
     except Exception as e:
         print(f"Error transferring data: {e}")
+
+    finally:
+        # Ensure connections are properly closed
+        if mongodb:
+            mongodb.close()
+        if postgresdb:
+            postgresdb.close_pool()
        
 # if __name__ == "__main__": 
 #     daily_load_job_post_detail_to_postgres() 

@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from utils.mongodb_connection import MongoDB
 from utils.postgres_connection import PostgresDB
+import utils.common as cm
 from utils import config as cfg
 from datetime import date, datetime
 import re
@@ -32,6 +33,7 @@ mongodb = postgresdb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
+pattern = r'/(\d+)$'
 
 ###########################################################################
 #### 2. Connection
@@ -74,8 +76,23 @@ def connect_postgresdb():
 #### 3. Sitemap process: crawl => mongodb => postgres
 ###########################################################################
 def check_url_worker(job_url):
-    url_name = job_url[len('https://www.vietnamworks.com/') : len('https://www.vietnamworks.com/') +1]
-    # print(url_name)
+    """
+    Determines the worker ID based on the job URL.
+
+    This function extracts a specific character from the job URL after the base URL.
+    If the character is one of 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'g', 'k', or 'l',
+    it returns worker ID 1. Otherwise, it returns worker ID 2.
+
+    Args:
+        job_url (str): The job URL to check.
+
+    Returns:
+        int: The worker ID, either 1 or 2.
+            - 1: If the URL contains one of the characters from 'abcdefghigkl'.
+            - 2: Otherwise.
+    """
+    url_name = job_url[len('https://www.vietnamworks.com/') : len('https://www.vietnamworks.com/') + 1]
+
     if url_name in 'abcdefghigkl':
         return 1
     return 2
@@ -105,7 +122,6 @@ def crawl_job_post_sitemap(url):
     Returns:
         list: A list of dictionaries, each containing job URL and related metadata.
     """
-    pattern = r'/(\d+)$'
     namespaces = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
     headers = {"User-Agent": "Mozilla/5.0"}  # User agent to prevent access restrictions
     list_url = []
@@ -127,18 +143,18 @@ def crawl_job_post_sitemap(url):
             if not job_url:
                 continue
 
-            job_id_match = re.search(pattern, job_url)
+            job_id_match = cm.extract_object_id(job_url, pattern)
             job_id = job_id_match.group(1) if job_id_match else None
 
             # Build job entry
             job_entry = {
                 'job_url': job_url,
                 'job_id': job_id,
-                'changefreq': extract_text(url_tag, 'ns:changefreq', namespaces),
-                'lastmod': extract_text(url_tag, 'ns:lastmod', namespaces),
-                'priority': extract_text(url_tag, 'ns:priority', namespaces),
+                'changefreq': cm.extract_text(url_tag, 'ns:changefreq', namespaces),
+                'lastmod': cm.extract_text(url_tag, 'ns:lastmod', namespaces),
+                'priority': cm.extract_text(url_tag, 'ns:priority', namespaces),
                 'created_date': datetime.today(),
-                'worker': check_url_worker(job_url)
+                'worker': cm.check_url_worker(job_url)
             }
 
             list_url.append(job_entry)
@@ -152,55 +168,85 @@ def crawl_job_post_sitemap(url):
 
 def daily_job_post_sitemap_process(sitemap_urls=None):
     """
-    Process the pipeline to crawl and store data of sitemap url into mongodb
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """ 
-    mongodb = connect_mongodb()
-    
-     # Delete current data
-    delete_filter = {"created_date": today}
-    mongodb.delete_many(delete_filter)
-    
-    sitemap_urls = ["https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-0.xml",\
-                    "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-1.xml",\
-                    "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-2.xml",\
-                    "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-3.xml"]
-    for sitemap_url in sitemap_urls:
-        list_url = crawl_job_post_sitemap(sitemap_url)        
-        # Load current data
-        mongodb.insert_many(list_url)   
-    
-    # Close the connection    
-    mongodb.close()
-    
-def daily_job_post_sitemap_to_postgres():     
+    Process the pipeline to crawl and store job post sitemap data into MongoDB.
+
+    Args:
+        sitemap_urls (list, optional): List of sitemap URLs to crawl. Defaults to predefined URLs if None.
+
+    Returns:
+        None
+    """
+    mongodb = None
+    try:
+        # Connect to MongoDB
+        mongodb = connect_mongodb()
+
+        # Delete current data
+        delete_filter = {"created_date": today}
+        mongodb.delete_many(delete_filter)
+
+        # Use default sitemap URLs if none are provided
+        if sitemap_urls is None:
+            sitemap_urls = [
+                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-0.xml",
+                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-1.xml",
+                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-2.xml",
+                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-3.xml"
+            ]
+
+        # Crawl each sitemap URL and insert the data into MongoDB
+        for sitemap_url in sitemap_urls:
+            list_url = crawl_job_post_sitemap(sitemap_url)
+            mongodb.insert_many(list_url)
+
+    except Exception as e:
+        print(f"Error occurred during the sitemap process: {e}")
+
+    finally:        
+        # Ensure the MongoDB connection is closed properly if it was created
+        if 'mongodb' in locals() and mongodb:
+            mongodb.close()
+
+def daily_job_post_sitemap_to_postgres():
+    """
+    Process the pipeline to transfer job post sitemap data from MongoDB to PostgreSQL.
+
+    Returns:
+        None
+    """
     mongodb = postgresdb = None
     try:
+        # Connect to MongoDB and select the relevant collection
         mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['vl24h_job_post_sitemap']) 
+        mongodb.set_collection(mongo_conn['vl24h_job_post_sitemap'])
+
+        # Filter data from MongoDB
         filter = {"created_date": today}
         employer_docs = mongodb.select(filter)
-        
+
+        # Connect to PostgreSQL and delete current data for today
         postgresdb = connect_postgresdb()
-        # delete current data
         condition_to_delete = {"created_date": today}
         deleted_rows = postgresdb.delete(postgres_conn['vl24h_job_post_sitemap'], condition_to_delete)
-        # load current data
-        print(f'Delete {deleted_rows} employer sitemap urls')
-        # load new data
+        print(f'Deleted {deleted_rows} job post sitemap URLs')
+
+        # Insert new data into PostgreSQL
         for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["vl24h_job_post_sitemap"], doc, "job_id")
-            print("Inserting job_id: ", inserted_id)
-       
-        # close connection
-        mongodb.close()
-        postgresdb.close_pool()
+            print("Inserting job_id:", inserted_id)
+
         print("Data transferred successfully")
+
     except Exception as e:
-        print(f"Error transferring data: {e}")     
+        print(f"Error transferring data: {e}")
+
+    finally:
+        # Ensure connections are closed
+        if mongodb:
+            mongodb.close()
+        if postgresdb:
+            postgresdb.close_pool()   
    
 ###########################################################################
 #### 4. Job post detail process:crawl => mongodb => postgres
@@ -243,7 +289,7 @@ def crawl_job_post_template(soup, job_url):
     }
     
     # Extract job_id from job_url
-    job_id_match = re.search(r'/(\d+)$', job_url)
+    job_id_match = cm.extract_object_id(job_url, pattern)
     job["job_id"] = job_id_match.group(1) if job_id_match else None
 
     # PART 1: TOP - Extract <h1> title, <h2> salary and deadline, and updated date
@@ -343,62 +389,88 @@ def crawl_job_post_worker(job_url):
     except requests.exceptions.RequestException as e:
         print( f"Error occurred: {str(e)}")
  
-def daily_job_url_generator_airflow(worker):    
+def daily_job_url_generator_airflow(worker):
     """
-    Crawl all jobs in sitemap data and store into mongodb using Airflow
+    Crawl all jobs from the sitemap data and store them into MongoDB using Airflow.
+
+    This function reads job URLs from MongoDB, processes each job, and stores the data.
     Args: 
-        worker
-    Returns: job url
-    """  
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['vl24h_job_post_sitemap'])
-    # Filter
-    filter = {"created_date": today, "worker": worker}
-    # Projecttion: select only the "job_url" field
-    projection = {"_id": False, "job_url": True}
-    cursor = mongodb.select(filter, projection)
-    count = 0
-    # Extract job_url
-    for document in cursor:
-        print(document["job_url"])
-        crawl_job_post_worker(document["job_url"]) 
-        count += 1
-        if  count > 4:
-            break
-        #     break   
-    # Close the connection    
-    mongodb.close()      
+        worker (int): Identifier for the worker that processes the URLs.
+
+    Returns:
+        None
+    """
+    mongodb = None
+    try:
+        # Connect to MongoDB and select the collection
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['vl24h_job_post_sitemap'])
+        
+        # Define filter and projection for the query
+        filter = {"created_date": today, "worker": worker}
+        projection = {"_id": False, "job_url": True}
+        
+        # Select job URLs to crawl
+        cursor = mongodb.select(filter, projection)
+
+        # Limit job URLs to be processed to 5 as per original logic
+        for count, document in enumerate(cursor):
+            if count >= 5:
+                break
+            job_url = document.get("job_url")
+            if job_url:
+                print(f"Crawling job URL: {job_url}")
+                crawl_job_post_worker(job_url)
+
+        print(f"Processed {count + 1} job URLs successfully.")
+
+    except Exception as e:
+        print(f"Error occurred during job URL generation: {e}")
+
+    finally:
+        # Close MongoDB connection safely if it was successfully established
+        if 'mongodb' in locals() and mongodb:
+            mongodb.close()
  
-def daily_load_job_post_detail_to_postgres():       
+def daily_load_job_post_detail_to_postgres():
     """
-    Process the pipeline to transfer job post detail from mongodb to postgres using Airflow
-    Args: 
-        mongodb: connection to mongodb
-    Returns: 
-    """   
+    Process the pipeline to transfer job post details from MongoDB to PostgreSQL using Airflow.
+
+    Returns:
+        None
+    """
     mongodb = postgresdb = None
     try:
+        # Connect to MongoDB and select the appropriate collection
         mongodb = connect_mongodb()
-        mongodb.set_collection(mongo_conn['vl24h_job_post_detail']) 
-        # load full
+        mongodb.set_collection(mongo_conn['vl24h_job_post_detail'])
+
+        # Load full data from MongoDB
         employer_docs = mongodb.select()
-        
+
+        # Connect to PostgreSQL and truncate existing table data
         postgresdb = connect_postgresdb()
-        # truncate
         postgresdb.truncate_table(postgres_conn["vl24h_job_post_detail"])
-        # load full
+
+        # Insert each document into PostgreSQL
         for doc in employer_docs:
-            doc_id = doc.pop('_id', None)  # Remove MongoDB specific ID
+            doc.pop('_id', None)  # Remove MongoDB specific ID
             inserted_id = postgresdb.insert(postgres_conn["vl24h_job_post_detail"], doc, "job_id")
-            print("Inserting job_id: ", inserted_id)
-       
-        # close connection
-        mongodb.close()
-        postgresdb.close_pool()
+            print(f"Inserting job_id: {inserted_id}")
+
+        # Print success message
         print("Data transferred successfully")
+
     except Exception as e:
-        print(f"Error transferring data: {e}")   
-        
+        print(f"Error transferring data: {e}")
+
+    finally:
+        # Ensure connections are closed
+        if mongodb:
+            mongodb.close()
+        if postgresdb:
+            postgresdb.close_pool()
+      
           
 if __name__ == "__main__":  
     # Process sitemap

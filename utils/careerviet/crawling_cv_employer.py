@@ -137,21 +137,35 @@ def daily_employer_sitemap_process():
     Returns:
         None
     """
-    mongodb = connect_mongodb()
-    
-    # Crawling sitemap
-    sitemap_url = "https://careerviet.vn/sitemap/employer.xml"
-    list_url = crawl_employer_sitemap(sitemap_url)
-    
-    # Delete current data
-    delete_filter = {"created_date": today}
-    mongodb.delete_many(delete_filter)
-    
-    # Load current data
-    mongodb.insert_many(list_url)
-    
-    # Close the connection    
-    mongodb.close()
+    mongodb = None
+    try:
+        # Connect to MongoDB
+        mongodb = connect_mongodb()
+
+        # Crawling the sitemap
+        sitemap_url = "https://careerviet.vn/sitemap/employer.xml"
+        list_url = crawl_employer_sitemap(sitemap_url)
+
+        if not list_url:
+            print("No data retrieved from sitemap. Exiting process.")
+            return
+
+        # Delete current data for today
+        delete_filter = {"created_date": today}
+        mongodb.delete_many(delete_filter)
+
+        # Insert the newly fetched data into MongoDB
+        mongodb.insert_many(list_url)
+
+        print("Employer sitemap data successfully processed and inserted into MongoDB.")
+
+    except Exception as e:
+        print(f"Error during daily employer sitemap process: {e}")
+
+    finally:
+        # Close the MongoDB connection if it was opened
+        if mongodb:
+            mongodb.close()
  
 def daily_employer_sitemap_to_postgres():  
     """
@@ -327,36 +341,47 @@ def crawl_employer_worker(employer_url):
     # Close the connection    
     mongodb.close()
 
-def daily_employer_url_generator_airflow(worker):    
+def daily_employer_url_generator_airflow(worker):
     """
     Generate employer URLs, crawl them, and store results into MongoDB using Airflow.
 
-    Args: 
+    Args:
         worker (str): Worker identifier.
 
     Returns:
         None
     """
-    mongodb = connect_mongodb()
-    mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
+    mongodb = None
+    try:
+        # Connect to MongoDB and select the appropriate collection
+        mongodb = connect_mongodb()
+        mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
 
-    # Filter for URLs last modified today and assigned to the given worker
-    filter = {"lastmod": today, "worker": worker}
-    projection = {"_id": False, "employer_url": True}
-    cursor = mongodb.select(filter, projection)
+        # Filter for URLs last modified today and assigned to the given worker
+        filter = {"lastmod": today, "worker": worker}
+        projection = {"_id": False, "employer_url": True}
+        cursor = mongodb.select(filter, projection)
 
-    count = 0
-    for document in cursor:
-        employer_url = document.get("employer_url")
-        if employer_url:
-            print(employer_url)
-            crawl_employer_worker(employer_url)
-            count += 1
+        # Limit to 5 URLs
+        for count, document in enumerate(cursor, start=1):
+            employer_url = document.get("employer_url")
+            if employer_url:
+                print(f"Crawling employer URL: {employer_url}")
+                crawl_employer_worker(employer_url)
+
+            # Break after 5 records
             if count >= 5:
                 break
 
-    # Close the connection    
-    mongodb.close()
+        print(f"Successfully processed {count} employer URLs.")
+
+    except Exception as e:
+        print(f"Error during daily employer URL generation process: {e}")
+
+    finally:
+        # Close the MongoDB connection if it was opened
+        if mongodb:
+            mongodb.close()
 
 def daily_load_employer_detail_to_postgres():    
     """
