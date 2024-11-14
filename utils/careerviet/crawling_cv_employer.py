@@ -313,12 +313,7 @@ def crawl_employer_worker(employer_url):
     Args:
         employer_url (str): URL of the employer page.
     """
-    pattern = r'\.([A-Z0-9]+)\.html'
-    match = re.search(pattern, employer_url)
-    if not match:
-        return
-
-    employer_id = match.group(1)
+    employer_id = cm.extract_object_id(employer_url, pattern)
 
     mongodb = connect_mongodb()    
     mongodb.set_collection(mongo_conn['cv_employer_detail'])

@@ -26,6 +26,8 @@ import utils.careerviet.crawling_cv_job_post as cv_jp
 import utils.careerviet.crawling_cv_employer as cv_emp   
 import utils.vietnamwork.crawling_vnw_employer as vnw_emp
 import utils.vietnamwork.crawling_vnw_job_post as vnw_jp
+import utils.vieclam24h.crawling_vl24h_employer as vl24h_emp
+import utils.vieclam24h.crawling_vl24h_job_post as vl24h_jp
 
 
 # [END import_module]
