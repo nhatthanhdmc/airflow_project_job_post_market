@@ -365,7 +365,7 @@ def daily_employer_url_generator_airflow(worker):
                 crawl_employer_worker(employer_url)
 
             # Break after 5 records
-            if count >= 5:
+            if count >= cm.limited_item:
                 break
 
         print(f"Successfully processed {count} employer URLs.")

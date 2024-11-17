@@ -415,7 +415,7 @@ def daily_job_url_generator_airflow(worker):
 
         # Limit job URLs to be processed to 5 as per original logic
         for count, document in enumerate(cursor):
-            if count >= 5:
+            if count >= cm.limited_item:
                 break
             job_url = document.get("job_url")
             if job_url:

@@ -504,7 +504,7 @@ def daily_job_url_generator_airflow(worker):
             print(job_url)
             crawl_job_post_worker(job_url)
             count += 1
-            if count > 4:
+            if count >= cm.limited_item:
                 break
 
     # Close the MongoDB connection

@@ -244,23 +244,19 @@ def daily_job_post_sitemap_to_postgres():
 ###########################################################################
 def crawl_job_post_template(soup, job_url):
     """
-    Crawl a job post and extract relevant data from the page.
-
-    Args:
-        soup (BeautifulSoup): BeautifulSoup object representing the HTML of the job post page.
-        job_url (str): The URL of the job post.
-
-    Returns:
-        dict: A dictionary containing job details.
-    """
-    # Initialize attributes in a dictionary
+    Crawl a job with template 1
+    Args: 
+        job_url (string): job URL.
+    Returns: 
+        job (dict): A dictionary containing extracted job details.
+    """ 
+    # Attribute initialization
     job = {
-        "job_id": cm.extract_object_id(job_url, pattern),
+        "job_id": None,
         "job_url": job_url,
         "job_title": None,
         "location": None,
         "company_url": None,
-        "updated_date_on_web": None,
         "industry": None,
         "field": None,
         "job_type": None,
@@ -272,48 +268,71 @@ def crawl_job_post_template(soup, job_url):
         "job_description": None,
         "job_requirement": None,
         "more_information": None,
-        "created_date": today,
+        "created_date": datetime.today().strftime('%Y-%m-%d'),
         "total_views": None,
         "posted_date": None,
         "worker": check_url_worker(job_url)
     }
 
-    # Extract information using reusable function extract_text and directly update the job dictionary
-    job["job_title"] = cm.extract_text(soup, 'h1', {'name': 'title'})
-    job["salary"] = cm.extract_text(soup, '#vnwLayout__col > span', index=0)
-    job["deadline"] = cm.extract_text(soup, '#vnwLayout__col > div > span', index=0)
+    # Extract job_id from URL
+    pattern = r'-(\d+)-jv$'
+    match = re.search(pattern, job_url)
+    if match:
+        job["job_id"] = match.group(1)
 
-    # Extract total views using regex if the required element exists
-    total_views_text = cm.extract_text(soup, '#vnwLayout__col > div > span', index=1)
-    job["total_views"] = re.findall(r'\d+', total_views_text)[0] if total_views_text else None
+    # PART 1: TOP
+    job_title_element = soup.find('h1', attrs={'name': 'title'})
+    if job_title_element:
+        job["job_title"] = job_title_element.text.strip()
 
-    job["company_url"] = cm.extract_text(soup, '#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a', attr='href', index=0)
+    salary_element = soup.select_one('#vnwLayout__col > span')
+    if salary_element:
+        job["salary"] = salary_element.text.strip()
 
-    # Extract job description by joining paragraph texts
-    job["job_description"] = ''.join(p.text.strip() for p in soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')) if soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p') else None
+    deadline_element = soup.select_one('#vnwLayout__col > div > span')
+    if deadline_element:
+        job["deadline"] = deadline_element.text.strip()
 
-    # Extract benefit information
-    job["benefit"] = '\n '.join([div.text.strip() for div in soup.find_all('div', attrs={'data-benefit-name': True})]) if soup.find_all('div', attrs={'data-benefit-name': True}) else None
+    views_element = soup.select('#vnwLayout__col > div > span')
+    if len(views_element) >= 2:
+        job["total_views"] = re.findall(r'\d+', views_element[1].text.strip())[0]
 
-    # Extract additional job information from div elements
+    company_url_element = soup.select_one('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a')
+    if company_url_element:
+        job["company_url"] = company_url_element['href']
+
+    # PART 2: BODY
+    job_description_elements = soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')
+    if job_description_elements:
+        job["job_description"] = ''.join(p.text.strip() for p in job_description_elements)
+
+    benefit_elements = soup.find_all('div', attrs={'data-benefit-name': True})
+    if benefit_elements:
+        job["benefit"] = '\n'.join(div.text.strip() for div in benefit_elements)
+
     div_elements = soup.select('#vnwLayout__col > div > div.sc-7bf5461f-2.JtIju')
-
-    def extract_from_divs(div_elements, text_to_search):
-        specific_div = next((div for div in div_elements if text_to_search in div.text), None)
+    
+    def find_text_by_label(div_elements, label):
+        specific_div = next((div for div in div_elements if label in div.text), None)
         return specific_div.find('p').text.strip() if specific_div else None
 
-    # Extract data from div elements and update job dictionary
-    job["posted_date"] = datetime.strptime(extract_from_divs(div_elements, "NGÀY ĐĂNG"), r"%d/%m/%Y") if extract_from_divs(div_elements, "NGÀY ĐĂNG") else None
-    job["job_level"] = extract_from_divs(div_elements, "CẤP BẬC")
-    job["field"] = extract_from_divs(div_elements, "NGÀNH NGHỀ")
-    job["job_requirement"] = extract_from_divs(div_elements, "KỸ NĂNG")
-    job["industry"] = extract_from_divs(div_elements, "LĨNH VỰC")
-    job["experience"] = extract_from_divs(div_elements, "SỐ NĂM KINH NGHIỆM TỐI THIỂU")
+    job["posted_date"] = find_text_by_label(div_elements, "NGÀY ĐĂNG")
+    if job["posted_date"]:
+        job["posted_date"] = datetime.strptime(job["posted_date"], r"%d/%m/%Y")
 
-    # Extract location information from the bottom section
-    div_elements = soup.select('#vnwLayout__col > div > div.sc-a137b890-0.bAqPjv')
-    job["location"] = extract_from_divs(div_elements, "Địa điểm làm việc")
+    job["job_level"] = find_text_by_label(div_elements, "CẤP BẬC")
+    job["field"] = find_text_by_label(div_elements, "NGÀNH NGHỀ")
+    job["job_requirement"] = find_text_by_label(div_elements, "KỸ NĂNG")
+    job["industry"] = find_text_by_label(div_elements, "LĨNH VỰC")
+    job["experience"] = find_text_by_label(div_elements, "SỐ NĂM KINH NGHIỆM TỐI THIỂU")
 
+    # PART 3: BOTTOM
+    location_div_elements = soup.select('#vnwLayout__col > div > div.sc-a137b890-0.bAqPjv')
+    location_specific_div = next((div for div in location_div_elements if "Địa điểm làm việc" in div.text), None)
+    if location_specific_div:
+        job["location"] = location_specific_div.find('p').text.strip()
+
+    print(job)
     return job
 
 def crawl_job_post_worker(job_url):
@@ -386,7 +405,7 @@ def daily_job_url_generator_airflow(worker):
             print(document["job_url"])
             crawl_job_post_worker(document["job_url"])
             count += 1
-            if count >= 5:  # Limit crawling to 5 jobs for each run
+            if count >= cm.limited_item:
                 break
 
     finally:        
@@ -437,5 +456,5 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    crawl_job_post_worker("https://www.vietnamworks.com/customer-service-executive-1836550-jv")
+    crawl_job_post_worker("https://www.vietnamworks.com/asm-kenh-y-te-mien-djong-1834526-jv")
     daily_load_job_post_detail_to_postgres()

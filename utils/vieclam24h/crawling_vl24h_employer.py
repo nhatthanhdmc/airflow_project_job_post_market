@@ -336,7 +336,7 @@ def daily_employer_url_generator_airflow(worker):
 
         # Process up to 5 employer URLs
         for count, document in enumerate(cursor):
-            if count >= 5:
+            if count >= cm.limited_item:
                 break
 
             employer_url = document.get("employer_url")

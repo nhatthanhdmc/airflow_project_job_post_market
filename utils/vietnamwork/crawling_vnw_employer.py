@@ -433,7 +433,7 @@ def daily_employer_url_generator_airflow(worker):
             crawl_employer_worker(document["employer_url"])
             
             # Stop after processing 5 URLs
-            if count >= 4:
+            if count >= cm.limited_item:
                 break
 
     except Exception as e:
