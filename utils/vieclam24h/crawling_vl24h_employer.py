@@ -344,8 +344,6 @@ def daily_employer_url_generator_airflow(worker):
                 print(f"Crawling employer URL: {employer_url}")
                 crawl_employer_worker(employer_url)
 
-        print(f"Processed {count + 1} employer URLs successfully.")
-
     except Exception as e:
         print(f"Error occurred during employer URL generation: {e}")
 

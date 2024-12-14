@@ -368,8 +368,6 @@ def daily_employer_url_generator_airflow(worker):
             if count >= cm.limited_item:
                 break
 
-        print(f"Successfully processed {count} employer URLs.")
-
     except Exception as e:
         print(f"Error during daily employer URL generation process: {e}")
 

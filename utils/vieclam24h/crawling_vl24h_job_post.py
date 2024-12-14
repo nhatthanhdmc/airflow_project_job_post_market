@@ -422,8 +422,6 @@ def daily_job_url_generator_airflow(worker):
                 print(f"Crawling job URL: {job_url}")
                 crawl_job_post_worker(job_url)
 
-        print(f"Processed {count + 1} job URLs successfully.")
-
     except Exception as e:
         print(f"Error occurred during job URL generation: {e}")
 
