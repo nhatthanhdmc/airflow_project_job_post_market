@@ -328,7 +328,14 @@ def daily_employer_url_generator_airflow(worker):
         mongodb.set_collection(mongo_conn['vl24h_employer_sitemap'])
 
         # Define filter and projection for the query
-        filter = {"lastmod": today, "worker": worker}
+        filter = {
+            "$or": [
+                {"lastmod": today},
+                {"created_date": today}
+            ],
+            "worker": worker
+        }
+        # filter = {"lastmod": today, "worker": worker}
         projection = {"_id": False, "employer_url": True}
 
         # Fetch employer URLs to crawl data

@@ -113,7 +113,7 @@ def crawl_employer_sitemap(url):
                 'employer_url': employer_url,
                 'changefreq': changefreq,
                 'lastmod': lastmod,
-                "created_date": date.today(),
+                "created_date": today,
                 "worker": check_url_worker(employer_url)
             })
 
@@ -145,7 +145,6 @@ def daily_employer_sitemap_process():
         # Crawling the sitemap
         sitemap_url = "https://careerviet.vn/sitemap/employer.xml"
         list_url = crawl_employer_sitemap(sitemap_url)
-
         if not list_url:
             print("No data retrieved from sitemap. Exiting process.")
             return
@@ -234,7 +233,6 @@ def check_url_worker(employer_url):
     if url_name == 'c':
         return 1
     return 2
-
 
 def crawl_employer_template(employer_url):
     """
@@ -353,7 +351,13 @@ def daily_employer_url_generator_airflow(worker):
         mongodb.set_collection(mongo_conn['cv_employer_sitemap'])
 
         # Filter for URLs last modified today and assigned to the given worker
-        filter = {"lastmod": today, "worker": worker}
+        filter = {
+            "$or": [
+                {"lastmod": today},
+                {"created_date": today}
+            ],
+            "worker": worker
+        }
         projection = {"_id": False, "employer_url": True}
         cursor = mongodb.select(filter, projection)
 
@@ -418,23 +422,10 @@ def daily_load_employer_detail_to_postgres():
 
     except Exception as e:
         print(f"Error transferring data: {e}")
-
-
  
-# if __name__ == "__main__":  
-    # daily_load_employer_sitemap_to_postgres()
-    # load_employer_detail_to_postgres()
-    # delete_duplicate_employer_detail()
-    # postgresdb = connect_postgresdb()
-    # data=postgresdb.select(postgres_conn["cv_employer_detail"])
-    # print(data)
-     
-# if __name__ == "__main__":  
-#     # Process site map process
-#     employer_sitemap_process()
-    
-#     # Current employer process
-#     current_employer_process()  
+if __name__ == "__main__":  
+    daily_employer_url_generator_airflow(1)
+
 
     
 

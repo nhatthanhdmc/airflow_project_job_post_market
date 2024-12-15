@@ -492,7 +492,14 @@ def daily_job_url_generator_airflow(worker):
     mongodb.set_collection(mongo_conn['cv_job_post_sitemap'])
 
     # Filter for URLs assigned to the worker and created today
-    filter = {"created_date": today, "worker": worker}
+    filter = {
+            "$or": [
+                {"lastmod": today},
+                {"created_date": today}
+            ],
+            "worker": worker
+        }
+    # filter = {"created_date": today, "worker": worker}
     projection = {"_id": False, "job_url": True}
     cursor = mongodb.select(filter, projection)
 

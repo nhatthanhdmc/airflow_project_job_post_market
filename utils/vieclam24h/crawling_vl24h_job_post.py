@@ -142,9 +142,7 @@ def crawl_job_post_sitemap(url):
             # Skip entries without job URLs
             if not job_url:
                 continue
-
-            job_id_match = cm.extract_object_id(job_url, pattern)
-            job_id = job_id_match.group(1) if job_id_match else None
+            job_id = cm.extract_object_id(job_url, pattern)
 
             # Build job entry
             job_entry = {
@@ -154,7 +152,7 @@ def crawl_job_post_sitemap(url):
                 'lastmod': cm.extract_text(url_tag, 'ns:lastmod', namespaces),
                 'priority': cm.extract_text(url_tag, 'ns:priority', namespaces),
                 'created_date': datetime.today(),
-                'worker': cm.check_url_worker(job_url)
+                'worker': check_url_worker(job_url)
             }
 
             list_url.append(job_entry)
@@ -166,7 +164,7 @@ def crawl_job_post_sitemap(url):
 
     return list_url
 
-def daily_job_post_sitemap_process(sitemap_urls=None):
+def daily_job_post_sitemap_process():
     """
     Process the pipeline to crawl and store job post sitemap data into MongoDB.
 
@@ -185,14 +183,12 @@ def daily_job_post_sitemap_process(sitemap_urls=None):
         delete_filter = {"created_date": today}
         mongodb.delete_many(delete_filter)
 
-        # Use default sitemap URLs if none are provided
-        if sitemap_urls is None:
-            sitemap_urls = [
-                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-0.xml",
-                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-1.xml",
-                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-2.xml",
-                "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-3.xml"
-            ]
+        sitemap_urls = [
+            "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-0.xml",
+            "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-1.xml",
+            "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-2.xml",
+            "https://cdn1.vieclam24h.vn/file/sitemap/job/tintuyendung-3.xml"
+        ]
 
         # Crawl each sitemap URL and insert the data into MongoDB
         for sitemap_url in sitemap_urls:
@@ -407,7 +403,14 @@ def daily_job_url_generator_airflow(worker):
         mongodb.set_collection(mongo_conn['vl24h_job_post_sitemap'])
         
         # Define filter and projection for the query
-        filter = {"created_date": today, "worker": worker}
+        filter = {
+            "$or": [
+                {"lastmod": today},
+                {"created_date": today}
+            ],
+            "worker": worker
+        }
+        # filter = {"created_date": today, "worker": worker}
         projection = {"_id": False, "job_url": True}
         
         # Select job URLs to crawl
@@ -472,6 +475,5 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    job_url = 'https://vieclam24h.vn/short/job/3129570'
-    crawl_job_post_worker(job_url)
-    daily_load_job_post_detail_to_postgres()
+    daily_job_post_sitemap_process()
+    daily_job_post_sitemap_to_postgres()
