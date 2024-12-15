@@ -151,7 +151,7 @@ def crawl_job_post_sitemap(url):
                 'changefreq': cm.extract_text(url_tag, 'ns:changefreq', namespaces),
                 'lastmod': cm.extract_text(url_tag, 'ns:lastmod', namespaces),
                 'priority': cm.extract_text(url_tag, 'ns:priority', namespaces),
-                'created_date': datetime.today(),
+                'created_date': today,
                 'worker': check_url_worker(job_url)
             }
 
@@ -279,7 +279,7 @@ def crawl_job_post_template(soup, job_url):
         "company_url": None, "updated_date_on_web": None, "industry": None, "field": None,
         "job_type": None, "salary": None, "experience": None, "job_level": None,
         "deadline": None, "benefit": None, "job_description": None, "job_requirement": None,
-        "more_information": None, "created_date": datetime.today(), "total_views": None,
+        "more_information": None, "created_date": today, "total_views": None,
         "posted_date": None, "probation_time": None, "num_of_recruitments": None,
         "working_type": None, "qualifications": None, "worker": check_url_worker(job_url)
     }
