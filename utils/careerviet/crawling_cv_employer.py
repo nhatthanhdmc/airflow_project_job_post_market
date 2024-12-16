@@ -424,7 +424,9 @@ def daily_load_employer_detail_to_postgres():
         print(f"Error transferring data: {e}")
  
 if __name__ == "__main__":  
-    daily_employer_url_generator_airflow(1)
+    # daily_employer_url_generator_airflow(1)
+    daily_employer_sitemap_process()
+    daily_employer_sitemap_to_postgres()
 
 
     

@@ -349,6 +349,7 @@ def crawl_job_post_template2(soup, job_url):
         "job_requirement": None,
         "more_information": None,
         "created_date": today,
+        "updated_date": today,
         "worker": check_url_worker(job_url)
     }
 
