@@ -448,6 +448,8 @@ def daily_load_job_post_detail_to_postgres():
 
         # Load full data from MongoDB
         employer_docs = mongodb.select()
+        print('xxx')
+        print(employer_docs)
 
         # Connect to PostgreSQL and truncate existing table data
         postgresdb = connect_postgresdb()
@@ -475,5 +477,6 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    daily_job_post_sitemap_process()
-    daily_job_post_sitemap_to_postgres()
+    # daily_job_post_sitemap_process()
+    # daily_job_post_sitemap_to_postgres()
+    daily_load_job_post_detail_to_postgres()
