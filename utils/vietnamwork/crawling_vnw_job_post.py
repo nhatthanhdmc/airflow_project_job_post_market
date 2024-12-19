@@ -457,5 +457,6 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    crawl_job_post_worker("https://www.vietnamworks.com/asm-kenh-y-te-mien-djong-1834526-jv")
+    # crawl_job_post_worker("https://www.vietnamworks.com/asm-kenh-y-te-mien-djong-1834526-jv")
+    
     daily_load_job_post_detail_to_postgres()
