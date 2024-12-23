@@ -285,8 +285,9 @@ def crawl_job_post_template(soup, job_url):
     }
     
     # Extract job_id from job_url
-    job_id_match = cm.extract_object_id(job_url, pattern)
-    job["job_id"] = job_id_match.group(1) if job_id_match else None
+    # job_id_match = cm.extract_object_id(job_url, pattern)
+    # job["job_id"] = job_id_match.group(1) if job_id_match else None
+    job["job_id"] = cm.extract_object_id(job_url, pattern)
 
     # PART 1: TOP - Extract <h1> title, <h2> salary and deadline, and updated date
     job["job_title"] = soup.find('h1').text.strip() if soup.find('h1') else None
@@ -479,4 +480,7 @@ if __name__ == "__main__":
     # Process sitemap
     # daily_job_post_sitemap_process()
     # daily_job_post_sitemap_to_postgres()
+    # daily_load_job_post_detail_to_postgres()
+    # daily_job_url_generator_airflow(1)
+    # daily_job_url_generator_airflow(2)
     daily_load_job_post_detail_to_postgres()

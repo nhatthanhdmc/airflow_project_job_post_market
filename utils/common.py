@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 
-limited_item = 98
+limited_item = 2
 
 def convert_list_of_dicts_to_dict(list_of_dicts):
     """

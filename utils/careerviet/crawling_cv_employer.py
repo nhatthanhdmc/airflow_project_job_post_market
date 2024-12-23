@@ -248,8 +248,9 @@ def crawl_employer_template(employer_url):
     time.sleep(1)
 
     # Extract employer_id using regex
-    match = re.search(pattern, employer_url)
-    employer_id = match.group(1) if match else None
+    # match = re.search(pattern, employer_url)
+    # employer_id = match.group(1) if match else None
+    employer_id = cm.extract_object_id(employer_url, pattern)
     if not employer_id:
         return None
 
