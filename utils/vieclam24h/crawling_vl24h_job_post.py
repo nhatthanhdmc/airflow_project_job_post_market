@@ -19,6 +19,7 @@ import re
 import time
 import multiprocessing
 import xml.etree.ElementTree as ET
+
 ###########################################################################
 #### 1. Global variable
 ###########################################################################
@@ -33,8 +34,8 @@ mongodb = postgresdb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
-pattern = r'/(\d+)$'
-
+pattern_job_id = r'/(\d+)$'
+pattern_employer_id = r'(ntd\d+p\d+)\.html'
 ###########################################################################
 #### 2. Connection
 ###########################################################################
@@ -142,7 +143,7 @@ def crawl_job_post_sitemap(url):
             # Skip entries without job URLs
             if not job_url:
                 continue
-            job_id = cm.extract_object_id(job_url, pattern)
+            job_id = cm.extract_object_id(job_url, pattern_job_id)
 
             # Build job entry
             job_entry = {
@@ -281,17 +282,20 @@ def crawl_job_post_template(soup, job_url):
         "deadline": None, "benefit": None, "job_description": None, "job_requirement": None,
         "more_information": None, "created_date": today, "total_views": None,
         "posted_date": None, "probation_time": None, "num_of_recruitments": None,
-        "working_type": None, "qualifications": None, "worker": check_url_worker(job_url)
+        "working_type": None, "qualifications": None, "worker": check_url_worker(job_url),
+        "employer_id": None
     }
     
     # Extract job_id from job_url
-    # job_id_match = cm.extract_object_id(job_url, pattern)
+    # job_id_match = cm.extract_object_id(job_url, pattern_job_id)
     # job["job_id"] = job_id_match.group(1) if job_id_match else None
-    job["job_id"] = cm.extract_object_id(job_url, pattern)
+    job["job_id"] = cm.extract_object_id(job_url, pattern_job_id)
 
     # PART 1: TOP - Extract <h1> title, <h2> salary and deadline, and updated date
     job["job_title"] = soup.find('h1').text.strip() if soup.find('h1') else None
-
+    job["company_url"] = soup.find('a').get('href') if soup.find('a') else None
+    job["employer_id"] = cm.extract_object_id(job["company_url"], pattern_employer_id) if job["company_url"] else None
+            
     h2_elements = soup.find_all('h2', class_=['text-14', 'leading-6'])
     job["salary"] = get_specific_text(h2_elements, 'Mức lương')
     job["deadline"] = get_specific_text(h2_elements, 'Hạn nộp hồ sơ')

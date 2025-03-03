@@ -19,6 +19,7 @@ import re
 import time
 import multiprocessing
 import xml.etree.ElementTree as ET
+from utils.vietnamwork import crawling_vnw_employer as emp 
 ###########################################################################
 #### 1. Global variable
 ###########################################################################
@@ -272,7 +273,8 @@ def crawl_job_post_template(soup, job_url):
         "updated_date": today,
         "total_views": None,
         "posted_date": None,
-        "worker": check_url_worker(job_url)
+        "worker": check_url_worker(job_url),
+        "employer_id": None
     }
 
     # Extract job_id from URL
@@ -301,6 +303,7 @@ def crawl_job_post_template(soup, job_url):
     company_url_element = soup.select_one('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a')
     if company_url_element:
         job["company_url"] = company_url_element['href']
+        job["employer_id"] = emp.generate_employer_id(job["company_url"]) if job["company_url"] else None
 
     # PART 2: BODY
     job_description_elements = soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')

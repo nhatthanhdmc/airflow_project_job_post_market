@@ -39,8 +39,8 @@ mongodb = None
 today = date.today().strftime("%Y-%m-%d")  
 mongo_conn = cfg.mongodb['CRAWLING']
 postgres_conn = cfg.postgres['DWH']
-pattern = r'\.([A-Z0-9]+)\.html'
-
+pattern_job_id = r'\.([A-Z0-9]+)\.html'
+pattern_employer_id = r'\.([A-Z0-9]+)\.html'
 ###########################################################################
 #### 2. Connection
 ###########################################################################
@@ -124,7 +124,7 @@ def crawl_job_post_sitemap(sitemap_url):
 
         for item in list_item:
             job_url = cm.extract_text(item, 'loc')
-            job_id = cm.extract_object_id(job_url, pattern)
+            job_id = cm.extract_object_id(job_url, pattern_job_id)
             image = cm.extract_text(item, 'image:loc')
             changefreq = cm.extract_text(item, 'changefreq')
             lastmod = cm.extract_text(item, 'lastmod')
@@ -269,11 +269,12 @@ def crawl_job_post_template1(soup, job_url):
         "more_information": None,
         "created_date": today,
         "updated_date": today,
-        "worker": check_url_worker(job_url)
+        "worker": check_url_worker(job_url),
+        "employer_id": None
     }
 
     # Extract job ID using the URL
-    job["job_id"] = cm.extract_object_id(job_url, pattern)
+    job["job_id"] = cm.extract_object_id(job_url, pattern_job_id)
 
     # PART 1: Extract TOP section (Job title, Company URL)
     head_left = soup.find('div', class_='head-left')
@@ -281,7 +282,7 @@ def crawl_job_post_template1(soup, job_url):
         job["job_title"] = cm.extract_text(head_left, 'h2', 'title')
         company_link = head_left.find('a')
         job["company_url"] = company_link.get('href') if company_link else None
-
+        job["employer_id"] = cm.extract_object_id(job["company_url"], pattern_employer_id) if job["company_url"] else None
     # PART 2: Extract BODY section (Industry, Salary, Job Type, etc.)
     body = soup.find('div', class_='body-template')
     if body:
@@ -351,11 +352,12 @@ def crawl_job_post_template2(soup, job_url):
         "more_information": None,
         "created_date": today,
         "updated_date": today,
-        "worker": check_url_worker(job_url)
+        "worker": check_url_worker(job_url),
+        "employer_id": None
     }
 
     # Extract job ID using the URL
-    job["job_id"] = cm.extract_object_id(job_url, pattern)
+    job["job_id"] = cm.extract_object_id(job_url, pattern_job_id)
 
     # PART 1: Extract Job Title, Company URL
     job_desc = soup.find('div', class_='job-desc')
@@ -367,7 +369,7 @@ def crawl_job_post_template2(soup, job_url):
         company_link = job_desc.find('a')
         if company_link:
             job["company_url"] = company_link.get('href')
-
+            job["employer_id"] = cm.extract_object_id(job["company_url"], pattern_employer_id) if job["company_url"] else None
     # PART 2: OVERVIEW Section Extraction
     job_detail_content = soup.find('div', id='tab-1')
     if job_detail_content:
