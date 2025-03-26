@@ -20,6 +20,7 @@ import time
 import multiprocessing
 import xml.etree.ElementTree as ET
 from utils.vietnamwork import crawling_vnw_employer as emp 
+from urllib.parse import urlparse, urlunparse
 ###########################################################################
 #### 1. Global variable
 ###########################################################################
@@ -245,7 +246,7 @@ def daily_job_post_sitemap_to_postgres():
 ###########################################################################
 def crawl_job_post_template(soup, job_url):
     """
-    Crawl a job with template 1
+    Crawl a job with template 
     Args: 
         job_url (string): job URL.
     Returns: 
@@ -303,8 +304,14 @@ def crawl_job_post_template(soup, job_url):
     company_url_element = soup.select_one('#vnwLayout__col > div > div.sc-37577279-0.joYsyf > div.sc-37577279-3.drWnZq > a')
     if company_url_element:
         job["company_url"] = company_url_element['href']
-        job["employer_id"] = emp.generate_employer_id(job["company_url"]) if job["company_url"] else None
-
+        if job["company_url"]:
+            # Parse the URL
+            parsed_url = urlparse(job["company_url"])
+            # Remove the query parameters
+            clean_url = urlunparse(parsed_url._replace(query=""))
+            job["employer_id"] = emp.generate_employer_id(clean_url)
+        
+        print(' job["employer_id"] ',  job["employer_id"])
     # PART 2: BODY
     job_description_elements = soup.select('#vnwLayout__col > div > div.sc-4913d170-0.gtgeCm > div > div > div:nth-child(1) > div > div > p')
     if job_description_elements:
@@ -460,6 +467,6 @@ def daily_load_job_post_detail_to_postgres():
           
 if __name__ == "__main__":  
     # Process sitemap
-    # crawl_job_post_worker("https://www.vietnamworks.com/asm-kenh-y-te-mien-djong-1834526-jv")
+    crawl_job_post_worker("https://www.vietnamworks.com/it-and-erp-specialist-1876839-jv")
     
-    daily_load_job_post_detail_to_postgres()
+    # daily_load_job_post_detail_to_postgres()

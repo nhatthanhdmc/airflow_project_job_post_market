@@ -293,9 +293,10 @@ def crawl_job_post_template(soup, job_url):
 
     # PART 1: TOP - Extract <h1> title, <h2> salary and deadline, and updated date
     job["job_title"] = soup.find('h1').text.strip() if soup.find('h1') else None
-    job["company_url"] = soup.find('a').get('href') if soup.find('a') else None
+    job["company_url"] = soup.find('div', class_='md:ml-7 w-full').find('a').get('href') if soup.find('div', class_='md:ml-7 w-full').find('a') else None
+    job["company_url"] = 'https://vieclam24h.vn' + job["company_url"]  if job["company_url"] else None
+    
     job["employer_id"] = cm.extract_object_id(job["company_url"], pattern_employer_id) if job["company_url"] else None
-            
     h2_elements = soup.find_all('h2', class_=['text-14', 'leading-6'])
     job["salary"] = get_specific_text(h2_elements, 'Mức lương')
     job["deadline"] = get_specific_text(h2_elements, 'Hạn nộp hồ sơ')
@@ -303,7 +304,7 @@ def crawl_job_post_template(soup, job_url):
         soup.find('span', class_='font-semibold').text.strip()
         if soup.find('span', class_='font-semibold') else None
     )
-
+    # print(job)
     # PART 2: BODY - Map <h3> fields to attributes
     h3_elements = soup.find_all('h3', class_='ml-3')
     h3_mappings = {
@@ -487,4 +488,6 @@ if __name__ == "__main__":
     # daily_load_job_post_detail_to_postgres()
     # daily_job_url_generator_airflow(1)
     # daily_job_url_generator_airflow(2)
-    daily_load_job_post_detail_to_postgres()
+    # daily_load_job_post_detail_to_postgres()
+    url = 'https://vieclam24h.vn/ban-hang-kinh-doanh/vib-giam-doc-quan-ly-khach-hang-quan-ly-khach-hang-cao-cap-quan-ly-khach-hang-ca-nhan-c13p122id200529273.html'
+    crawl_job_post_worker(url)
